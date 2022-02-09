@@ -15,10 +15,10 @@ from model import least_square_loss, StaticLoss
 from dataset import ZurichPairDataset  # noqa
 from utils import PolyLrUpdater
 
-# target_crop_size = (540, 960)
-# crop_size = (512, 1024)
-target_crop_size = (64, 64)
-crop_size = (64, 64)
+target_crop_size = (540, 960)
+crop_size = (512, 1024)
+# target_crop_size = (64, 64)
+# crop_size = (64, 64)
 
 cityscapes_type = 'CityscapesDataset'
 cityscapes_data_root = 'data/cityscapes/'
@@ -147,13 +147,13 @@ def main(max_iters: int):
 
     ce_loss = torch.nn.CrossEntropyLoss(ignore_index=255, weight=weights)
     static_loss = StaticLoss(num_classes=11, weights=weights[:11])
-    bce_loss = torch.nn.BCELoss(weight=torch.Tensor([-1]).cuda())
+    bce_loss = torch.nn.BCEWithLogitsLoss()
 
     source_iter = iter(source_dataloader)
     target_iter = iter(target_dataloader)
 
     # set train iters
-    seg_iters = 2
+    seg_iters = 5
     # main loop
     for i in range(max_iters):
         start_time = time.time()
@@ -178,7 +178,7 @@ def main(max_iters: int):
                                  mode='bilinear',
                                  align_corners=True)
 
-        source_predicts = F.softmax(source_predicts, dim=1)
+        # source_predicts = F.softmax(source_predicts, dim=1)
         loss_source = ce_loss(source_predicts, source_labels.squeeze(1))
         # save cuda memory
         # loss_source.backward()
@@ -215,7 +215,7 @@ def main(max_iters: int):
         seg_optimizer.step()
         seg_lr_updater.set_lr(seg_optimizer, i)
 
-        if i % seg_iters == 0:
+        if i % seg_iters != 0:
             iter_time = time.time() - start_time
             eta = iter_time * (max_iters - i)
             mins, s = divmod(eta, 60)
@@ -223,8 +223,8 @@ def main(max_iters: int):
             days, hour = divmod(hours, 24)
             ETA = f'{int(days)}天{int(hour)}小时{int(minute)}分{int(s)}秒'
             print(
-                'Iter-[{0:5d}|{1:6d}] loss_adv_source: {2:.5f} loss_adv_target_day: {3:.5f} loss_adv_target_night: {4:.5f} loss_source_value: {5:.5f} loss_static_value: {6:.5f} lr_seg: {7:.5f} lr_adv: {8:.5f} ETA: {9} '  # noqa
-                .format(i, max_iters, 0, 0, 0, loss_seg_value,
+                'Iter-[{0:5d}|{1:6d}] loss_adv_source:         loss_adv_target_day:         loss_adv_target_night:         loss_source_value: {2:.5f} loss_static_value: {3:.5f} lr_seg: {4:.5f} lr_adv: {5:.5f} ETA: {6} '  # noqa
+                .format(i, max_iters, loss_seg_value,
                         loss_static_value, seg_optimizer.param_groups[0]['lr'],
                         adv_optimizer.param_groups[0]['lr'], ETA))
             continue
