@@ -2,7 +2,7 @@ import sys
 import os.path as osp
 import time
 import torch
-import torch.nn.functional as F
+
 from torch.utils.data import DataLoader
 import mmcv
 from mmcv.parallel import MMDataParallel
@@ -19,10 +19,10 @@ from model import StaticLoss
 from dataset import ZurichPairDataset  # noqa
 from utils import PolyLrUpdater
 
-# target_crop_size = (540, 960)
-# crop_size = (512, 1024)
-target_crop_size = (64, 64)
-crop_size = (64, 64)
+target_crop_size = (540, 960)
+crop_size = (512, 1024)
+# target_crop_size = (64, 64)
+# crop_size = (64, 64)
 
 cityscapes_type = 'CityscapesDataset'
 cityscapes_data_root = 'data/cityscapes/'
@@ -206,7 +206,7 @@ def main(max_iters: int, work_dirs='work_dirs'):
     # set train iters
     seg_iters = 5
     # main loop
-    for i in range(max_iters):
+    for i in range(max_iters + 1):
         start_time = time.time()
         source_batch = next(source_iter)
         target_batch = next(target_iter)
@@ -233,9 +233,11 @@ def main(max_iters: int, work_dirs='work_dirs'):
         # save cuda memory
         # loss_source.backward()
 
-        target_predicts_day = model.encode_decode(target_img_day, img_metas=dict()) # noqa
+        target_predicts_day = model.encode_decode(target_img_day,
+                                                  img_metas=dict())  # noqa
 
-        target_predicts_night = model.encode_decode(target_img_night, img_metas=dict()) # noqa
+        target_predicts_night = model.encode_decode(target_img_night,
+                                                    img_metas=dict())  # noqa
 
         pseudo_prob = torch.zeros_like(target_predicts_day)
         threshold = torch.ones_like(target_predicts_day[:, :11, :, :]) * 0.2
@@ -288,11 +290,15 @@ def main(max_iters: int, work_dirs='work_dirs'):
         target_predicts_day = target_predicts_day.detach()
         target_predicts_night = target_predicts_night.detach()
 
-        adv_source_predict = F.sigmoid(discriminator(source_predicts))
-        adv_target_predict_day = F.sigmoid(
-            discriminator(F.softmax(target_predicts_day, dim=1)))
-        adv_target_predict_night = F.sigmoid(
-            discriminator(F.softmax(target_predicts_night, dim=1)))
+        # adv_source_predict = F.sigmoid(discriminator(source_predicts))
+        # adv_target_predict_day = F.sigmoid(
+        #     discriminator(F.softmax(target_predicts_day, dim=1)))
+        # adv_target_predict_night = F.sigmoid(
+        #     discriminator(F.softmax(target_predicts_night, dim=1)))
+
+        adv_source_predict = discriminator(source_predicts)
+        adv_target_predict_day = discriminator(target_predicts_day)
+        adv_target_predict_night = discriminator(target_predicts_night)
 
         target_label = torch.FloatTensor(
             adv_target_predict_day.data.size()).fill_(1).cuda()
@@ -331,7 +337,7 @@ def main(max_iters: int, work_dirs='work_dirs'):
                     seg_optimizer.param_groups[0]['lr'],
                     adv_optimizer.param_groups[0]['lr'], ETA))
 
-        if i % 2000 == 0 and i != 0:
+        if i % 4000 == 0 and i != 0:
             print('taking snapshot ...')
             torch.save(model.state_dict(),
                        osp.join(work_dirs, f'segmentor_{i}.pth'))
@@ -354,4 +360,4 @@ if __name__ == '__main__':
     mmcv.mkdir_or_exist(work_dirs)
     log_file = osp.join(work_dirs, f'{timestamp}.log')
     sys.stdout = Logger(log_file)
-    main(max_iters=20000, work_dirs=work_dirs)
+    main(max_iters=80000, work_dirs=work_dirs)
