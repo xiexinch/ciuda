@@ -5,7 +5,7 @@ import torch
 
 from torch.utils.data import DataLoader
 import mmcv
-from mmcv.parallel import MMDataParallel
+from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.utils import Config
 from mmseg.apis import single_gpu_test
 from mmseg.ops import resize
@@ -133,7 +133,7 @@ def set_require_grad(model: torch.nn.Module, state: bool):
         m.requires_grad = state
 
 
-def main(max_iters: int, work_dirs='work_dirs'):
+def main(max_iters: int, work_dirs='work_dirs', distributed=False):
     config = Config(model_config)
     # init model
     # repvgg_a0 = RepVGG(num_blocks=[2, 4, 14, 1],
@@ -145,6 +145,20 @@ def main(max_iters: int, work_dirs='work_dirs'):
     # refinenet = RefineNet(num_classes=19).cuda()
     model = build_segmentor(config.model).cuda()
     discriminator = FCDiscriminator(in_channels=19).cuda()
+
+    if distributed:
+        model = MMDistributedDataParallel(
+            model,
+            device_ids=[torch.cuda.current_device()],
+            broadcast_buffers=False,
+            find_unused_parameters=False
+        )
+        discriminator = MMDistributedDataParallel(
+            discriminator,
+            device_ids=[torch.cuda.current_device()],
+            broadcast_buffers=False,
+            find_unused_parameters=False
+        )
 
     # init dataloader
     source_dataset = build_dataset(source_config)
@@ -360,4 +374,4 @@ if __name__ == '__main__':
     mmcv.mkdir_or_exist(work_dirs)
     log_file = osp.join(work_dirs, f'{timestamp}.log')
     sys.stdout = Logger(log_file)
-    main(max_iters=80000, work_dirs=work_dirs)
+    main(max_iters=80000, work_dirs=work_dirs, distributed=False)
