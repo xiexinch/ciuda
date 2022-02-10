@@ -155,7 +155,7 @@ def main(max_iters: int):
     # set train iters
     seg_iters = 5
     # main loop
-    for i in range(max_iters):
+    for i in range(max_iters + 1):
         start_time = time.time()
         source_batch = next(source_iter)
         target_batch = next(target_iter)
@@ -224,8 +224,8 @@ def main(max_iters: int):
             ETA = f'{int(days)}天{int(hour)}小时{int(minute)}分{int(s)}秒'
             print(
                 'Iter-[{0:5d}|{1:6d}] loss_adv_source:         loss_adv_target_day:         loss_adv_target_night:         loss_source_value: {2:.5f} loss_static_value: {3:.5f} lr_seg: {4:.5f} lr_adv: {5:.5f} ETA: {6} '  # noqa
-                .format(i, max_iters, loss_seg_value,
-                        loss_static_value, seg_optimizer.param_groups[0]['lr'],
+                .format(i, max_iters, loss_seg_value, loss_static_value,
+                        seg_optimizer.param_groups[0]['lr'],
                         adv_optimizer.param_groups[0]['lr'], ETA))
             continue
 
@@ -239,11 +239,15 @@ def main(max_iters: int):
         target_predicts_day = target_predicts_day.detach()
         target_predicts_night = target_predicts_night.detach()
 
-        adv_source_predict = F.sigmoid(discriminator(source_predicts))
-        adv_target_predict_day = F.sigmoid(
-            discriminator(F.softmax(target_predicts_day, dim=1)))
-        adv_target_predict_night = F.sigmoid(
-            discriminator(F.softmax(target_predicts_night, dim=1)))
+        # adv_source_predict = F.sigmoid(discriminator(source_predicts))
+        # adv_target_predict_day = F.sigmoid(
+        #     discriminator(F.softmax(target_predicts_day, dim=1)))
+        # adv_target_predict_night = F.sigmoid(
+        #     discriminator(F.softmax(target_predicts_night, dim=1)))
+
+        adv_source_predict = discriminator(source_predicts)
+        adv_target_predict_day = discriminator(target_predicts_day)
+        adv_target_predict_night = discriminator(target_predicts_night)
 
         target_label = torch.FloatTensor(
             adv_target_predict_day.data.size()).fill_(1).cuda()
@@ -282,7 +286,7 @@ def main(max_iters: int):
                     seg_optimizer.param_groups[0]['lr'],
                     adv_optimizer.param_groups[0]['lr'], ETA))
 
-        if i % 2000 == 0 and i != 0:
+        if i % 4000 == 0 and i != 0:
             print('taking snapshot ...')
             torch.save(repvgg_a0.state_dict(),
                        osp.join('work_dirs', f'repvgg_{i}.pth'))
@@ -295,6 +299,7 @@ def main(max_iters: int):
 if __name__ == '__main__':
     # log_file
     timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
-    log_file = osp.join('work_dirs', f'{timestamp}.log')
+    log_file = osp.join('work_dirs/ciuda_repvgg_refinenet_1',
+                        f'{timestamp}.log')
     sys.stdout = Logger(log_file)
-    main(max_iters=20000)
+    main(max_iters=40000)
