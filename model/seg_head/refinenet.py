@@ -23,6 +23,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import torch.nn as nn
 import torch.nn.functional as F
+from mmseg.models import HEADS
+from mmseg.models.decode_heads.decode_head import BaseDecodeHead
 
 data_info = {21: 'VOC', 19: 'CITY'}
 
@@ -100,9 +102,17 @@ class RCUBlock(nn.Module):
         return x
 
 
-class RefineNet(nn.Module):
-    def __init__(self, in_channels=[1280, 192, 96, 48], num_classes=19):
-        super(RefineNet, self).__init__()
+@HEADS.register_module()
+class RefineNet(BaseDecodeHead):
+    def __init__(self,
+                 in_channels=[1280, 192, 96, 48],
+                 channels=256,
+                 num_classes=19,
+                 **kwargs):
+        super(RefineNet, self).__init__(in_channels=in_channels,
+                                        channels=channels,
+                                        num_classes=num_classes,
+                                        **kwargs)
         self.drop_out = nn.Dropout(p=0.5)
         self.relu = nn.ReLU(inplace=True)
 

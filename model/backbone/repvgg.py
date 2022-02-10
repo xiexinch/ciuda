@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 
 from mmcv.runner import BaseModule
+from mmseg.models import BACKBONES
 
 from ..core import SEBlock, CIConv2d
 
@@ -183,6 +184,7 @@ class RepVGGBlock(BaseModule):
         self.deploy = True
 
 
+@BACKBONES.register_module()
 class RepVGG(nn.Module):
     def __init__(self,
                  num_blocks,

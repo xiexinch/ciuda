@@ -1,24 +1,28 @@
-from statistics import mode
 import sys
 import os.path as osp
 import time
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from mmseg.datasets import build_dataset, build_dataloader
+import mmcv
+from mmcv.parallel import MMDataParallel
+from mmcv.utils import Config
+from mmseg.apis import single_gpu_test
 from mmseg.ops import resize
+from mmseg.models import build_segmentor
+from mmseg.datasets import build_dataset, build_dataloader
 
-from model.backbone import RepVGG
-from model.seg_head import RefineNet
+from model.backbone import RepVGG  # noqa
+from model.seg_head import RefineNet  # noqa
 from model.discriminator import FCDiscriminator
-from model import least_square_loss, StaticLoss
+from model import StaticLoss
 from dataset import ZurichPairDataset  # noqa
 from utils import PolyLrUpdater
 
-target_crop_size = (540, 960)
-crop_size = (512, 1024)
-# target_crop_size = (64, 64)
-# crop_size = (64, 64)
+# target_crop_size = (540, 960)
+# crop_size = (512, 1024)
+target_crop_size = (64, 64)
+crop_size = (64, 64)
 
 cityscapes_type = 'CityscapesDataset'
 cityscapes_data_root = 'data/cityscapes/'
@@ -54,6 +58,22 @@ target_train_pipeline = [
     dict(type='Collect', keys=['img']),
 ]
 
+test_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(
+        type='MultiScaleFlipAug',
+        img_scale=(1920, 1080),
+        # img_ratios=[0.5, 0.75, 1.0, 1.25, 1.5, 1.75],
+        flip=False,
+        transforms=[
+            dict(type='Resize', keep_ratio=True),
+            dict(type='RandomFlip'),
+            dict(type='Normalize', **img_norm_cfg),
+            dict(type='ImageToTensor', keys=['img']),
+            dict(type='Collect', keys=['img']),
+        ])
+]
+
 source_config = dict(type='RepeatDataset',
                      times=500,
                      dataset=dict(type=cityscapes_type,
@@ -68,6 +88,30 @@ target_config = dict(
     pair_list_path='configs/_base_/datasets/zurich_dn_pair_train.csv',
     pipeline=target_train_pipeline,
     repeat_times=500)
+
+test_config = dict(type='DarkZurichDataset',
+                   data_root='data/dark_zurich/',
+                   img_dir='val/rgb_anon/val/night',
+                   ann_dir='val/gt/val/night',
+                   pipeline=test_pipeline)
+
+model_config = dict(model=dict(
+    type='EncoderDecoder',
+    backbone=dict(type='RepVGG',
+                  num_blocks=[2, 4, 14, 1],
+                  width_multiplier=[0.75, 0.75, 0.75, 2.5],
+                  deploy=False,
+                  use_se=True,
+                  invariant='W'),
+    decode_head=dict(type='RefineNet',
+                     in_channels=[1280, 192, 96, 48],
+                     channels=256,
+                     num_classes=19,
+                     in_index=[0, 1, 2, 3],
+                     input_transform='multiple_select'),
+    # model training and testing settings
+    train_cfg=dict(),
+    test_cfg=dict(mode='whole')))
 
 
 class Logger(object):
@@ -89,21 +133,23 @@ def set_require_grad(model: torch.nn.Module, state: bool):
         m.requires_grad = state
 
 
-def main(max_iters: int):
-
+def main(max_iters: int, work_dirs='work_dirs'):
+    config = Config(model_config)
     # init model
-    repvgg_a0 = RepVGG(num_blocks=[2, 4, 14, 1],
-                       width_multiplier=[0.75, 0.75, 0.75, 2.5],
-                       deploy=False,
-                       use_se=True,
-                       invariant='W')
-    repvgg_a0 = repvgg_a0.cuda()
-    refinenet = RefineNet(num_classes=19).cuda()
+    # repvgg_a0 = RepVGG(num_blocks=[2, 4, 14, 1],
+    #                    width_multiplier=[0.75, 0.75, 0.75, 2.5],
+    #                    deploy=False,
+    #                    use_se=True,
+    #                    invariant='W')
+    # repvgg_a0 = repvgg_a0.cuda()
+    # refinenet = RefineNet(num_classes=19).cuda()
+    model = build_segmentor(config.model).cuda()
     discriminator = FCDiscriminator(in_channels=19).cuda()
 
     # init dataloader
     source_dataset = build_dataset(source_config)
     target_dataset = build_dataset(target_config)
+    test_dataset = build_dataset(test_config)
 
     source_dataloader = build_dataloader(source_dataset,
                                          samples_per_gpu=2,
@@ -119,9 +165,14 @@ def main(max_iters: int):
                                    shuffle=True,
                                    pin_memory=True)
 
+    test_dataloader = build_dataloader(test_dataset,
+                                       samples_per_gpu=1,
+                                       workers_per_gpu=2,
+                                       dist=False,
+                                       shuffle=True)
+
     # optimizer and lr updater
-    seg_optimizer = torch.optim.SGD(list(repvgg_a0.parameters()) +
-                                    list(refinenet.parameters()),
+    seg_optimizer = torch.optim.SGD(model.parameters(),
                                     lr=0.01,
                                     momentum=0.9,
                                     weight_decay=0.0005)
@@ -162,16 +213,15 @@ def main(max_iters: int):
 
         source_imgs, source_labels = source_batch['img'].data[0].cuda(
         ), source_batch['gt_semantic_seg'].data[0].cuda()
-        target_img_day, taget_img_night = target_batch['img_day'].cuda(
+        target_img_day, target_img_night = target_batch['img_day'].cuda(
         ), target_batch['img_night'].cuda()
 
         # train segmentation network
         set_require_grad(discriminator, False)
-        set_require_grad(repvgg_a0, True)
-        set_require_grad(refinenet, True)
+        set_require_grad(model, True)
         seg_optimizer.zero_grad()
-        source_feats = repvgg_a0(source_imgs)
-        source_predicts = refinenet(source_feats)
+
+        source_predicts = model.encode_decode(source_imgs, img_metas=dict())
 
         source_predicts = resize(source_predicts,
                                  size=crop_size,
@@ -183,10 +233,9 @@ def main(max_iters: int):
         # save cuda memory
         # loss_source.backward()
 
-        target_feats_day = repvgg_a0(target_img_day)
-        target_predicts_day = refinenet(target_feats_day)
-        target_feats_night = repvgg_a0(taget_img_night)
-        target_predicts_night = refinenet(target_feats_night)
+        target_predicts_day = model.encode_decode(target_img_day, img_metas=dict()) # noqa
+
+        target_predicts_night = model.encode_decode(target_img_night, img_metas=dict()) # noqa
 
         pseudo_prob = torch.zeros_like(target_predicts_day)
         threshold = torch.ones_like(target_predicts_day[:, :11, :, :]) * 0.2
@@ -224,15 +273,15 @@ def main(max_iters: int):
             ETA = f'{int(days)}天{int(hour)}小时{int(minute)}分{int(s)}秒'
             print(
                 'Iter-[{0:5d}|{1:6d}] loss_adv_source:         loss_adv_target_day:         loss_adv_target_night:         loss_source_value: {2:.5f} loss_static_value: {3:.5f} lr_seg: {4:.5f} lr_adv: {5:.5f} ETA: {6} '  # noqa
-                .format(i, max_iters, loss_seg_value,
-                        loss_static_value, seg_optimizer.param_groups[0]['lr'],
+                .format(i, max_iters, loss_seg_value, loss_static_value,
+                        seg_optimizer.param_groups[0]['lr'],
                         adv_optimizer.param_groups[0]['lr'], ETA))
             continue
 
         # train discriminator network
         set_require_grad(discriminator, True)
-        set_require_grad(repvgg_a0, False)
-        set_require_grad(refinenet, False)
+        set_require_grad(model, False)
+
         adv_optimizer.zero_grad()
 
         source_predicts = source_predicts.detach()
@@ -284,17 +333,25 @@ def main(max_iters: int):
 
         if i % 2000 == 0 and i != 0:
             print('taking snapshot ...')
-            torch.save(repvgg_a0.state_dict(),
-                       osp.join('work_dirs', f'repvgg_{i}.pth'))
-            torch.save(refinenet.state_dict(),
-                       osp.join('work_dirs', f'refinenet_{i}.pth'))
+            torch.save(model.state_dict(),
+                       osp.join(work_dirs, f'segmentor_{i}.pth'))
+
             torch.save(discriminator.state_dict(),
-                       osp.join('work_dirs', f'discriminator_{i}.pth'))
+                       osp.join(work_dirs, f'discriminator_{i}.pth'))
+            results = single_gpu_test(MMDataParallel(model, device_ids=[0]),
+                                      test_dataloader,
+                                      pre_eval=True,
+                                      format_only=False)
+            metric = test_dataset.evaluate(results, metric='mIoU')
+            print(metric)
+            model.train()
 
 
 if __name__ == '__main__':
     # log_file
     timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
-    log_file = osp.join('work_dirs', f'{timestamp}.log')
+    work_dirs = osp.join('work_dirs', f'ciuda_{timestamp}')
+    mmcv.mkdir_or_exist(work_dirs)
+    log_file = osp.join(work_dirs, f'{timestamp}.log')
     sys.stdout = Logger(log_file)
-    main(max_iters=20000)
+    main(max_iters=20000, work_dirs=work_dirs)
