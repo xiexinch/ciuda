@@ -1,4 +1,6 @@
+import argparse
 import sys
+import os
 import os.path as osp
 import time
 import torch
@@ -12,17 +14,17 @@ from mmseg.ops import resize
 from mmseg.models import build_segmentor
 from mmseg.datasets import build_dataset, build_dataloader
 
-from model.backbone import RepVGG  # noqa
+from model.backbone import *  # noqa
 from model.seg_head import RefineNet  # noqa
 from model.discriminator import FCDiscriminator
 from model import StaticLoss
 from dataset import ZurichPairDataset  # noqa
 from utils import PolyLrUpdater
 
-target_crop_size = (540, 960)
-crop_size = (512, 1024)
-# target_crop_size = (64, 64)
-# crop_size = (64, 64)
+# target_crop_size = (540, 960)
+# crop_size = (512, 1024)
+target_crop_size = (64, 64)
+crop_size = (64, 64)
 
 cityscapes_type = 'CityscapesDataset'
 cityscapes_data_root = 'data/cityscapes/'
@@ -114,7 +116,48 @@ model_config = dict(model=dict(
     test_cfg=dict(mode='whole')))
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description='Train a segmentor')
+    parser.add_argument('config', help='train config file path')
+    parser.add_argument('--work-dir', help='the dir to save logs and models')
+    parser.add_argument('--load-from',
+                        help='the checkpoint file to load weights from')
+    parser.add_argument('--resume-from',
+                        help='the checkpoint file to resume from')
+    parser.add_argument(
+        '--no-validate',
+        action='store_true',
+        help='whether not to evaluate the checkpoint during training')
+    group_gpus = parser.add_mutually_exclusive_group()
+    group_gpus.add_argument('--gpus',
+                            type=int,
+                            help='number of gpus to use '
+                            '(only applicable to non-distributed training)')
+    group_gpus.add_argument('--gpu-ids',
+                            type=int,
+                            nargs='+',
+                            help='ids of gpus to use '
+                            '(only applicable to non-distributed training)')
+    parser.add_argument('--seed', type=int, default=None, help='random seed')
+    parser.add_argument(
+        '--deterministic',
+        action='store_true',
+        help='whether to set deterministic options for CUDNN backend.')
+
+    parser.add_argument('--launcher',
+                        choices=['none', 'pytorch', 'slurm', 'mpi'],
+                        default='none',
+                        help='job launcher')
+    parser.add_argument('--local_rank', type=int, default=0)
+    args = parser.parse_args()
+    if 'LOCAL_RANK' not in os.environ:
+        os.environ['LOCAL_RANK'] = str(args.local_rank)
+
+    return args
+
+
 class Logger(object):
+
     def __init__(self, filename):
         self.terminal = sys.stdout
         self.log = open(filename, 'a')
@@ -134,16 +177,11 @@ def set_require_grad(model: torch.nn.Module, state: bool):
 
 
 def main(max_iters: int, work_dirs='work_dirs', distributed=False):
-    config = Config(model_config)
-    # init model
-    # repvgg_a0 = RepVGG(num_blocks=[2, 4, 14, 1],
-    #                    width_multiplier=[0.75, 0.75, 0.75, 2.5],
-    #                    deploy=False,
-    #                    use_se=True,
-    #                    invariant='W')
-    # repvgg_a0 = repvgg_a0.cuda()
-    # refinenet = RefineNet(num_classes=19).cuda()
-    model = build_segmentor(config.model).cuda()
+    # config = Config(model_config)
+    args = parse_args()
+    cfg = Config.fromfile(args.config)
+
+    model = build_segmentor(cfg.model).cuda()
     discriminator = FCDiscriminator(in_channels=19).cuda()
 
     if distributed:
@@ -151,14 +189,12 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
             model,
             device_ids=[torch.cuda.current_device()],
             broadcast_buffers=False,
-            find_unused_parameters=False
-        )
+            find_unused_parameters=False)
         discriminator = MMDistributedDataParallel(
             discriminator,
             device_ids=[torch.cuda.current_device()],
             broadcast_buffers=False,
-            find_unused_parameters=False
-        )
+            find_unused_parameters=False)
 
     # init dataloader
     source_dataset = build_dataset(source_config)

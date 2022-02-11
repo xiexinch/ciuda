@@ -38,6 +38,7 @@ class RepVGGBlock(BaseModule):
         super(RepVGGBlock, self).__init__()
         self.deploy = deploy
         self.groups = groups
+        self.in_channels = in_channels
 
         assert kernel_size == 3
         assert padding == 1
