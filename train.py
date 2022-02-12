@@ -5,14 +5,15 @@ import os.path as osp
 import time
 import torch
 
-from torch.utils.data import DataLoader
 import mmcv
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.utils import Config
+from mmcv.runner import load_checkpoint
 from mmseg.apis import single_gpu_test
 from mmseg.ops import resize
 from mmseg.models import build_segmentor
 from mmseg.datasets import build_dataset, build_dataloader
+from torch.utils.data import DataLoader
 
 from model.backbone import *  # noqa
 from model.seg_head import RefineNet  # noqa
@@ -183,7 +184,8 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
 
     model = build_segmentor(cfg.model).cuda()
     discriminator = FCDiscriminator(in_channels=19).cuda()
-
+    if cfg.checkpoint:
+        load_checkpoint(model, cfg.checkpoint)
     if distributed:
         model = MMDistributedDataParallel(
             model,
@@ -410,4 +412,4 @@ if __name__ == '__main__':
     mmcv.mkdir_or_exist(work_dirs)
     log_file = osp.join(work_dirs, f'{timestamp}.log')
     sys.stdout = Logger(log_file)
-    main(max_iters=80000, work_dirs=work_dirs, distributed=False)
+    main(max_iters=80000, work_dirs=work_dirs, distributed=True)
