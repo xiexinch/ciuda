@@ -1,11 +1,13 @@
 import os.path as osp
-
+from mmcv.parallel import DataContainer
 from mmseg.datasets import DATASETS
 from mmseg.datasets.pipelines import Compose
+from torch.utils.data import Dataset
 
 
 @DATASETS.register_module()
-class ZurichPairDataset(object):
+class ZurichPairDataset(Dataset):
+
     def __init__(self,
                  data_root: str,
                  pair_list_path: str,
@@ -51,12 +53,15 @@ class ZurichPairDataset(object):
         # self.pre_pipeline(night_result)
         img_day = self.pipeline(day_result)
         img_night = self.pipeline(night_result)
-        data = dict(img_day=img_day['img'].data,
-                    img_day_metas=img_day['img_metas'].data,
-                    img_night=img_night['img'].data,
-                    img_night_metas=img_night['img_metas'].data)
-
-        return data
+        _data = dict(img_day=img_day['img'].data,
+                     img_day_metas=img_day['img_metas'].data,
+                     img_night=img_night['img'].data,
+                     img_night_metas=img_night['img_metas'].data)
+        # data = dict(img_day=img_day['img'],
+        #             img_day_metas=img_day['img_metas'],
+        #             img_night=img_night['img'],
+        #             img_night_metas=img_night['img_metas'])
+        return DataContainer(_data)
 
     def __len__(self):
         return self._ori_len * self.repeat_times

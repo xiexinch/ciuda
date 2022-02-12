@@ -8,12 +8,12 @@ import torch
 import mmcv
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.utils import Config
-from mmcv.runner import load_checkpoint
+from mmcv.runner import load_checkpoint, get_dist_info, init_dist
 from mmseg.apis import single_gpu_test
 from mmseg.ops import resize
 from mmseg.models import build_segmentor
 from mmseg.datasets import build_dataset, build_dataloader
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, DistributedSampler
 
 from model.backbone import *  # noqa
 from model.seg_head import RefineNet  # noqa
@@ -182,40 +182,77 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
     args = parse_args()
     cfg = Config.fromfile(args.config)
 
-    model = build_segmentor(cfg.model).cuda()
+    model = build_segmentor(cfg.model)
     discriminator = FCDiscriminator(in_channels=19).cuda()
     if cfg.checkpoint:
         load_checkpoint(model, cfg.checkpoint)
-    if distributed:
-        model = MMDistributedDataParallel(
-            model,
-            device_ids=[torch.cuda.current_device()],
-            broadcast_buffers=False,
-            find_unused_parameters=False)
-        discriminator = MMDistributedDataParallel(
-            discriminator,
-            device_ids=[torch.cuda.current_device()],
-            broadcast_buffers=False,
-            find_unused_parameters=False)
 
-    # init dataloader
     source_dataset = build_dataset(source_config)
     target_dataset = build_dataset(target_config)
     test_dataset = build_dataset(test_config)
 
+    if distributed:
+        init_dist(args.launcher, **cfg.dist_params)
+        # gpu_ids is used to calculate iter when resuming checkpoint
+        rank, world_size = get_dist_info()
+        cfg.gpu_ids = range(world_size)
+        # model = MMDistributedDataParallel(
+        #     model.cuda(),
+        #     device_ids=[torch.cuda.current_device()],
+        #     broadcast_buffers=False,
+        #     find_unused_parameters=False).module
+        # discriminator = MMDistributedDataParallel(
+        #     discriminator,
+        #     device_ids=[torch.cuda.current_device()],
+        #     broadcast_buffers=False,
+        #     find_unused_parameters=False).module
+
+        model = MMDataParallel(model.cuda(cfg.gpu_ids[0]),
+                               device_ids=[torch.cuda.current_device()]).module
+        discriminator = MMDataParallel(
+            discriminator.cuda(cfg.gpu_ids[0]),
+            device_ids=[torch.cuda.current_device()]).module
+
+        target_sampler = DistributedSampler(target_dataset,
+                                            world_size,
+                                            rank,
+                                            shuffle=True)
+        batch_size = 2 * len(cfg.gpu_ids)
+        num_workers = 2
+
+    else:
+        model = model.cuda()
+        batch_size = 2
+        num_workers = 2
+        target_sampler = None
+
+    # init dataloader
     source_dataloader = build_dataloader(source_dataset,
                                          samples_per_gpu=2,
                                          workers_per_gpu=2,
-                                         num_gpus=1,
-                                         dist=False,
+                                         num_gpus=len(cfg.gpu_ids),
+                                         dist=distributed,
                                          shuffle=True,
                                          seed=2022)
-    target_dataloader = DataLoader(target_dataset,
-                                   batch_size=2,
-                                   num_workers=2,
-                                   persistent_workers=True,
-                                   shuffle=True,
-                                   pin_memory=True)
+    mmcv.utils.print_log('source dataloader finished')
+
+    # target_dataloader = DataLoader(target_dataset,
+    #                                sampler=target_sampler,
+    #                                batch_size=batch_size,
+    #                                num_workers=num_workers,
+    #                                persistent_workers=False,
+    #                                shuffle=False,
+    #                                pin_memory=True)
+
+    target_dataloader = build_dataloader(target_dataset,
+                                         samples_per_gpu=2,
+                                         workers_per_gpu=2,
+                                         num_gpus=len(cfg.gpu_ids),
+                                         dist=distributed,
+                                         shuffle=True,
+                                         pin_memory=False,
+                                         seed=2022)
+    mmcv.utils.print_log('target dataloader finished')
 
     test_dataloader = build_dataloader(test_dataset,
                                        samples_per_gpu=1,
@@ -258,6 +295,7 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
     # set train iters
     seg_iters = 5
     # main loop
+    mmcv.utils.print_log('start training')
     for i in range(max_iters + 1):
         start_time = time.time()
         source_batch = next(source_iter)
@@ -265,23 +303,34 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
 
         source_imgs, source_labels = source_batch['img'].data[0].cuda(
         ), source_batch['gt_semantic_seg'].data[0].cuda()
-        target_img_day, target_img_night = target_batch['img_day'].cuda(
-        ), target_batch['img_night'].cuda()
 
-        # train segmentation network
+        target_batch = target_batch.data[0]
+
+        target_img_day = torch.cat([
+            target_batch[0]['img_day'].unsqueeze(0),
+            target_batch[1]['img_day'].unsqueeze(0)
+        ],
+                                   dim=0).cuda()
+
+        target_img_night = torch.cat([
+            target_batch[0]['img_night'].unsqueeze(0),
+            target_batch[1]['img_night'].unsqueeze(0)
+        ],
+                                     dim=0).cuda()
+
         set_require_grad(discriminator, False)
         set_require_grad(model, True)
         seg_optimizer.zero_grad()
 
         source_predicts = model.encode_decode(source_imgs, img_metas=dict())
 
-        source_predicts = resize(source_predicts,
-                                 size=crop_size,
-                                 mode='bilinear',
-                                 align_corners=True)
+        # source_predicts = resize(source_predicts,
+        #                          size=crop_size,
+        #                          mode='bilinear',
+        #                          align_corners=True)
 
         # source_predicts = F.softmax(source_predicts, dim=1)
-        loss_source = ce_loss(source_predicts, source_labels.squeeze(1))
+
         # save cuda memory
         # loss_source.backward()
 
@@ -306,7 +355,7 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
         pseudo_prob = pseudo_prob * weights_prob
         pseudo_gt = torch.argmax(pseudo_prob.detach(), dim=1)
         pseudo_gt[pseudo_gt >= 11] = 255
-
+        loss_source = ce_loss(source_predicts, source_labels.squeeze(1))
         loss_static = static_loss(target_predicts_night[:, :11, :, :],
                                   pseudo_gt)
         # save cuda memory
@@ -396,13 +445,13 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
 
             torch.save(discriminator.state_dict(),
                        osp.join(work_dirs, f'discriminator_{i}.pth'))
-            results = single_gpu_test(MMDataParallel(model, device_ids=[0]),
-                                      test_dataloader,
-                                      pre_eval=True,
-                                      format_only=False)
-            metric = test_dataset.evaluate(results, metric='mIoU')
-            print(metric)
-            model.train()
+            # results = single_gpu_test(MMDataParallel(model, device_ids=[0]),
+            #                           test_dataloader,
+            #                           pre_eval=True,
+            #                           format_only=False)
+            # metric = test_dataset.evaluate(results, metric='mIoU')
+            # print(metric)
+            # model.train()
 
 
 if __name__ == '__main__':

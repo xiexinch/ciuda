@@ -9,18 +9,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-def gaussian_basis_filters(scale, gpu, kernel_size=3):
+def gaussian_basis_filters(scale, kernel_size=3):
     std = torch.pow(2, scale)
-
     # Define the basis vector for the current scale
-    filter_size = torch.ceil(kernel_size * std + 0.5)
+    filter_size = torch.ceil(kernel_size * std + 0.5).item()
+    x = torch.arange(start=-filter_size, end=filter_size + 1).cuda()
 
-    x = torch.arange(start=-filter_size.item(), end=filter_size.item() + 1)
-    if gpu is not None:
-        x = x.cuda(gpu)
-        std = std.cuda(gpu)
+    x = x.cuda()
+    std = std.cuda()
     x = torch.meshgrid([x, x])
-
     # Calculate Gaussian filter base
     # Only exponent part of Gaussian function since it is normalized anyway
     g = torch.exp(-(x[0] / std)**2 / 2) * torch.exp(-(x[1] / std)**2 / 2)
@@ -103,6 +100,7 @@ inv_switcher = {'E': E_inv, 'W': W_inv, 'C': C_inv, 'N': N_inv, 'H': H_inv}
 
 
 class CIConv2d(nn.Module):
+
     def __init__(self, invariant: str, kernel_size=3, scale=0.0):
         super(CIConv2d, self).__init__()
         assert invariant in ['E', 'W', 'C', 'N', 'H'], 'invalid invariant'
@@ -114,8 +112,8 @@ class CIConv2d(nn.Module):
         # Constants
         self.gcm = torch.tensor([[0.06, 0.63, 0.27], [0.3, 0.04, -0.35],
                                  [0.34, -0.6, 0.17]])
-        if self.use_cuda:
-            self.gcm = self.gcm.cuda(self.gpu)
+        # if self.use_cuda:
+        #     self.gcm = self.gcm.cuda()
         self.kernel_size = kernel_size
 
         # Learnable parameters
@@ -132,14 +130,13 @@ class CIConv2d(nn.Module):
         # flatten image
         batch = batch.view((in_shape[:2] + (-1, )))
         # estimate E, EL, Ell
-        batch = torch.matmul(self.gcm, batch)
+        batch = torch.matmul(self.gcm.cuda(torch.cuda.current_device()), batch)
         # reshape to original image size
         batch = batch.view((in_shape[0], ) + (3, ) + in_shape[2:])
         E, El, Ell = torch.split(batch, 1, dim=1)
         # Convolve with Gaussian filters
         # KCHW
-        w = gaussian_basis_filters(scale=self.scale, gpu=self.gpu)
-
+        w = gaussian_basis_filters(scale=self.scale)
         # the padding here works as "same" for odd kernel sizes
         E_out = F.conv2d(input=E, weight=w, padding=int(w.shape[2] / 2))
         El_out = F.conv2d(input=El, weight=w, padding=int(w.shape[2] / 2))
