@@ -100,7 +100,6 @@ inv_switcher = {'E': E_inv, 'W': W_inv, 'C': C_inv, 'N': N_inv, 'H': H_inv}
 
 
 class CIConv2d(nn.Module):
-
     def __init__(self, invariant: str, kernel_size=3, scale=0.0):
         super(CIConv2d, self).__init__()
         assert invariant in ['E', 'W', 'C', 'N', 'H'], 'invalid invariant'
@@ -111,7 +110,7 @@ class CIConv2d(nn.Module):
 
         # Constants
         self.gcm = torch.tensor([[0.06, 0.63, 0.27], [0.3, 0.04, -0.35],
-                                 [0.34, -0.6, 0.17]])
+                                 [0.34, -0.6, 0.17]]).cuda()
         # if self.use_cuda:
         #     self.gcm = self.gcm.cuda()
         self.kernel_size = kernel_size
@@ -130,7 +129,7 @@ class CIConv2d(nn.Module):
         # flatten image
         batch = batch.view((in_shape[:2] + (-1, )))
         # estimate E, EL, Ell
-        batch = torch.matmul(self.gcm.cuda(torch.cuda.current_device()), batch)
+        batch = torch.matmul(self.gcm, batch)
         # reshape to original image size
         batch = batch.view((in_shape[0], ) + (3, ) + in_shape[2:])
         E, El, Ell = torch.split(batch, 1, dim=1)

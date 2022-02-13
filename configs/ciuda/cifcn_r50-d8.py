@@ -4,7 +4,8 @@ _base_ = [
 ]
 
 # model settings
-norm_cfg = dict(type='SyncBN', requires_grad=True)
+# norm_cfg = dict(type='SyncBN', requires_grad=True)
+norm_cfg = dict(type='BN', requires_grad=True)
 model = dict(
     type='EncoderDecoder',
     backbone=dict(type='CIResNet',
@@ -53,4 +54,4 @@ model = dict(
     train_cfg=dict(),
     test_cfg=dict(mode='whole'))
 
-checkpoint = 'checkpoints/iter_40000.pth'
+checkpoint = 'checkpoints/cifcn_r50_iter_40000.pth'

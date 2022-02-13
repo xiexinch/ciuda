@@ -14,18 +14,19 @@ from mmseg.ops import resize
 from mmseg.models import build_segmentor
 from mmseg.datasets import build_dataset, build_dataloader
 from torch.utils.data import DataLoader, DistributedSampler
+import torch.distributed as dist
 
 from model.backbone import *  # noqa
 from model.seg_head import RefineNet  # noqa
 from model.discriminator import FCDiscriminator
-from model import StaticLoss
+from model import StaticLoss, least_square_loss
 from dataset import ZurichPairDataset  # noqa
 from utils import PolyLrUpdater
 
-# target_crop_size = (540, 960)
-# crop_size = (512, 1024)
-target_crop_size = (64, 64)
-crop_size = (64, 64)
+target_crop_size = (540, 960)
+crop_size = (512, 1024)
+# target_crop_size = (64, 64)
+# crop_size = (64, 64)
 
 cityscapes_type = 'CityscapesDataset'
 cityscapes_data_root = 'data/cityscapes/'
@@ -158,7 +159,6 @@ def parse_args():
 
 
 class Logger(object):
-
     def __init__(self, filename):
         self.terminal = sys.stdout
         self.log = open(filename, 'a')
@@ -182,83 +182,85 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
     args = parse_args()
     cfg = Config.fromfile(args.config)
 
-    model = build_segmentor(cfg.model)
-    discriminator = FCDiscriminator(in_channels=19).cuda()
-    if cfg.checkpoint:
-        load_checkpoint(model, cfg.checkpoint)
-
-    source_dataset = build_dataset(source_config)
-    target_dataset = build_dataset(target_config)
-    test_dataset = build_dataset(test_config)
-
+    # init distributed env first
     if distributed:
         init_dist(args.launcher, **cfg.dist_params)
         # gpu_ids is used to calculate iter when resuming checkpoint
         rank, world_size = get_dist_info()
         cfg.gpu_ids = range(world_size)
-        # model = MMDistributedDataParallel(
-        #     model.cuda(),
-        #     device_ids=[torch.cuda.current_device()],
-        #     broadcast_buffers=False,
-        #     find_unused_parameters=False).module
-        # discriminator = MMDistributedDataParallel(
-        #     discriminator,
-        #     device_ids=[torch.cuda.current_device()],
-        #     broadcast_buffers=False,
-        #     find_unused_parameters=False).module
+        print(cfg.gpu_ids)
 
-        model = MMDataParallel(model.cuda(cfg.gpu_ids[0]),
-                               device_ids=[torch.cuda.current_device()]).module
-        discriminator = MMDataParallel(
-            discriminator.cuda(cfg.gpu_ids[0]),
-            device_ids=[torch.cuda.current_device()]).module
+    model = build_segmentor(cfg.model)
+    discriminator_1 = FCDiscriminator(in_channels=19)
+    discriminator_2 = FCDiscriminator(in_channels=19)
 
-        target_sampler = DistributedSampler(target_dataset,
-                                            world_size,
-                                            rank,
-                                            shuffle=True)
-        batch_size = 2 * len(cfg.gpu_ids)
-        num_workers = 2
+    if cfg.checkpoint:
+        load_checkpoint(model, cfg.checkpoint)
+
+    source_dataset = build_dataset(source_config)
+    target_dataset = build_dataset(target_config)
+    # test_dataset = build_dataset(test_config)
+
+    if distributed:
+
+        model = MMDistributedDataParallel(
+            model.cuda(),
+            device_ids=[torch.cuda.current_device()],
+            broadcast_buffers=False,
+            find_unused_parameters=False).module
+        discriminator_1 = MMDistributedDataParallel(
+            discriminator_1.cuda(),
+            device_ids=[torch.cuda.current_device()],
+            broadcast_buffers=False,
+            find_unused_parameters=False).module
+
+        discriminator_2 = MMDistributedDataParallel(
+            discriminator_2.cuda(),
+            device_ids=[torch.cuda.current_device()],
+            broadcast_buffers=False,
+            find_unused_parameters=False).module
+
+        # model = MMDataParallel(model.cuda(cfg.gpu_ids[0]),
+        #                        device_ids=[torch.cuda.current_device()]).module
+        # discriminator_1 = MMDataParallel(
+        #     discriminator_1.cuda(cfg.gpu_ids[0]),
+        #     device_ids=[torch.cuda.current_device()]).module
+        # discriminator_2 = MMDataParallel(
+        #     discriminator_2.cuda(cfg.gpu_ids[0]),
+        #     device_ids=[torch.cuda.current_device()]).module
 
     else:
         model = model.cuda()
-        batch_size = 2
-        num_workers = 2
-        target_sampler = None
+        discriminator_1 = discriminator_1.cuda()
+        discriminator_2 = discriminator_2.cuda()
 
     # init dataloader
-    source_dataloader = build_dataloader(source_dataset,
-                                         samples_per_gpu=2,
-                                         workers_per_gpu=2,
-                                         num_gpus=len(cfg.gpu_ids),
-                                         dist=distributed,
-                                         shuffle=True,
-                                         seed=2022)
+    source_dataloader = build_dataloader(
+        source_dataset,
+        samples_per_gpu=2,
+        workers_per_gpu=2,
+        num_gpus=len(cfg.gpu_ids) if distributed else 1,
+        dist=distributed,
+        shuffle=True,
+        seed=2022)
     mmcv.utils.print_log('source dataloader finished')
 
-    # target_dataloader = DataLoader(target_dataset,
-    #                                sampler=target_sampler,
-    #                                batch_size=batch_size,
-    #                                num_workers=num_workers,
-    #                                persistent_workers=False,
-    #                                shuffle=False,
-    #                                pin_memory=True)
-
-    target_dataloader = build_dataloader(target_dataset,
-                                         samples_per_gpu=2,
-                                         workers_per_gpu=2,
-                                         num_gpus=len(cfg.gpu_ids),
-                                         dist=distributed,
-                                         shuffle=True,
-                                         pin_memory=False,
-                                         seed=2022)
+    target_dataloader = build_dataloader(
+        target_dataset,
+        samples_per_gpu=2,
+        workers_per_gpu=2,
+        num_gpus=len(cfg.gpu_ids) if distributed else 1,
+        dist=distributed,
+        shuffle=True,
+        pin_memory=False,
+        seed=2022)
     mmcv.utils.print_log('target dataloader finished')
 
-    test_dataloader = build_dataloader(test_dataset,
-                                       samples_per_gpu=1,
-                                       workers_per_gpu=2,
-                                       dist=False,
-                                       shuffle=True)
+    # test_dataloader = build_dataloader(test_dataset,
+    #                                    samples_per_gpu=1,
+    #                                    workers_per_gpu=2,
+    #                                    dist=False,
+    #                                    shuffle=True)
 
     # optimizer and lr updater
     seg_optimizer = torch.optim.SGD(model.parameters(),
@@ -266,9 +268,12 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
                                     momentum=0.9,
                                     weight_decay=0.0005)
 
-    adv_optimizer = torch.optim.Adam(discriminator.parameters(),
-                                     lr=1e-4,
-                                     betas=(0.9, 0.999))
+    adv_optimizer_1 = torch.optim.Adam(discriminator_1.parameters(),
+                                       lr=1e-4,
+                                       betas=(0.9, 0.999))
+    adv_optimizer_2 = torch.optim.Adam(discriminator_2.parameters(),
+                                       lr=1e-4,
+                                       betas=(0.9, 0.999))
     seg_lr_updater = PolyLrUpdater(base_lr=0.01,
                                    max_iters=max_iters,
                                    min_lr=1e-4,
@@ -318,28 +323,26 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
         ],
                                      dim=0).cuda()
 
-        set_require_grad(discriminator, False)
+        ###########################################################################################
+
+        # Train Segmentor
+        set_require_grad(discriminator_1, False)
+        set_require_grad(discriminator_2, False)
         set_require_grad(model, True)
         seg_optimizer.zero_grad()
 
-        source_predicts = model.encode_decode(source_imgs, img_metas=dict())
-
-        # source_predicts = resize(source_predicts,
-        #                          size=crop_size,
-        #                          mode='bilinear',
-        #                          align_corners=True)
-
-        # source_predicts = F.softmax(source_predicts, dim=1)
-
-        # save cuda memory
-        # loss_source.backward()
+        # Train with target
 
         target_predicts_day = model.encode_decode(target_img_day,
                                                   img_metas=dict())  # noqa
 
+        d1_out = discriminator_1(target_predicts_day)
+        d1_label = torch.FloatTensor(d1_out.data.size()).fill_(1).cuda()
+        loss_adv_target_day = least_square_loss(d1_out, d1_label) * 0.01
+        loss_adv_target_day.backward(retain_graph=True)
+
         target_predicts_night = model.encode_decode(target_img_night,
                                                     img_metas=dict())  # noqa
-
         pseudo_prob = torch.zeros_like(target_predicts_day)
         threshold = torch.ones_like(target_predicts_day[:, :11, :, :]) * 0.2
         threshold[target_predicts_day[:, :11, :, :] > 0.4] = 0.8
@@ -355,17 +358,32 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
         pseudo_prob = pseudo_prob * weights_prob
         pseudo_gt = torch.argmax(pseudo_prob.detach(), dim=1)
         pseudo_gt[pseudo_gt >= 11] = 255
-        loss_source = ce_loss(source_predicts, source_labels.squeeze(1))
+
         loss_static = static_loss(target_predicts_night[:, :11, :, :],
                                   pseudo_gt)
+        d2_out = discriminator_2(target_predicts_day)
+        d2_label = torch.FloatTensor(d2_out.data.size()).fill_(1).cuda()
+        loss_adv_target_night = least_square_loss(d2_out, d2_label)
+        loss = 0.01 * loss_adv_target_night + loss_static
+        loss.backward(retain_graph=True)
+
+        ############################################################################################
+        # Train with source
+
+        source_predicts = model.encode_decode(source_imgs, img_metas=dict())
+        loss_source = ce_loss(source_predicts, source_labels.squeeze(1))
         # save cuda memory
-        # loss_static.backward()
-        loss = loss_source + loss_static
-        loss.backward()
+        loss_source.backward()
+
         loss_seg_value = loss_source.item()
         loss_static_value = loss_static.item()
         seg_optimizer.step()
         seg_lr_updater.set_lr(seg_optimizer, i)
+
+        if dist.is_available() and dist.is_initialized():
+            rank = dist.get_rank()
+        else:
+            rank = 0
 
         if i % seg_iters != 0:
             iter_time = time.time() - start_time
@@ -374,55 +392,62 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
             hours, minute = divmod(mins, 60)
             days, hour = divmod(hours, 24)
             ETA = f'{int(days)}天{int(hour)}小时{int(minute)}分{int(s)}秒'
-            print(
-                'Iter-[{0:5d}|{1:6d}] loss_adv_source:         loss_adv_target_day:         loss_adv_target_night:         loss_source_value: {2:.5f} loss_static_value: {3:.5f} lr_seg: {4:.5f} lr_adv: {5:.5f} ETA: {6} '  # noqa
-                .format(i, max_iters, loss_seg_value, loss_static_value,
-                        seg_optimizer.param_groups[0]['lr'],
-                        adv_optimizer.param_groups[0]['lr'], ETA))
+            if rank == 0:
+                print(
+                    'Iter-[{0:5d}|{1:6d}] loss_adv_source:         loss_adv_target_day:         loss_adv_target_night:         loss_source_value: {2:.5f} loss_static_value: {3:.5f} lr_seg: {4:.5f} lr_adv_1: {5:.5f} lr_adv_2: {6: .5f} ETA: {7} '  # noqa
+                    .format(i, max_iters, loss_seg_value, loss_static_value,
+                            seg_optimizer.param_groups[0]['lr'],
+                            adv_optimizer_1.param_groups[0]['lr'],
+                            adv_optimizer_2.param_groups[0]['lr'], ETA))
             continue
 
-        # train discriminator network
-        set_require_grad(discriminator, True)
-        set_require_grad(model, False)
+        ###########################################################################################
 
-        adv_optimizer.zero_grad()
+        # Train Discriminator network
+        set_require_grad(discriminator_1, True)
+        set_require_grad(discriminator_2, True)
+        set_require_grad(model, False)
+        adv_optimizer_1.zero_grad()
+        adv_optimizer_2.zero_grad()
+
+        ###########################################################################################
+        # Train with source
 
         source_predicts = source_predicts.detach()
+        d1_out = discriminator_1(source_predicts)
+        d1_label = torch.FloatTensor(d1_out.data.size()).fill_(0).cuda()
+        loss_d1 = least_square_loss(d1_out, d1_label) * 0.5
+        loss_d1.backward()
+
+        source_predicts = source_predicts.detach()
+        d2_out = discriminator_2(source_predicts)
+        d2_label = torch.FloatTensor(d2_out.data.size()).fill_(0).cuda()
+        loss_d2 = least_square_loss(d2_out, d2_label) * 0.5
+        loss_d2.backward()
+
+        loss_adv_source_value = loss_d1.item() + loss_d2.item()
+
+        ###########################################################################################
+        # Train with target
+
         target_predicts_day = target_predicts_day.detach()
         target_predicts_night = target_predicts_night.detach()
 
-        # adv_source_predict = F.sigmoid(discriminator(source_predicts))
-        # adv_target_predict_day = F.sigmoid(
-        #     discriminator(F.softmax(target_predicts_day, dim=1)))
-        # adv_target_predict_night = F.sigmoid(
-        #     discriminator(F.softmax(target_predicts_night, dim=1)))
+        d1_out = discriminator_1(target_predicts_day)
+        d1_label = torch.FloatTensor(d1_out.data.size()).fill_(1).cuda()
+        loss_d1 = least_square_loss(d1_out, d1_label)
+        loss_d1.backward()
+        adv_optimizer_1.step()
+        adv_lr_updater.set_lr(adv_optimizer_1, i)
 
-        adv_source_predict = discriminator(source_predicts)
-        adv_target_predict_day = discriminator(target_predicts_day)
-        adv_target_predict_night = discriminator(target_predicts_night)
+        d2_out = discriminator_2(target_predicts_night)
+        d2_label = torch.FloatTensor(d2_out.data.size()).fill_(1).cuda()
+        loss_d2 = least_square_loss(d2_out, d2_label)
+        loss_d2.backward()
+        adv_optimizer_2.step()
+        adv_lr_updater.set_lr(adv_optimizer_2, i)
 
-        target_label = torch.FloatTensor(
-            adv_target_predict_day.data.size()).fill_(1).cuda()
-        source_label = torch.FloatTensor(
-            adv_source_predict.data.size()).fill_(0).cuda()
-
-        loss_adv_source = bce_loss(adv_source_predict, source_label)
-        loss_adv_target_day = bce_loss(adv_target_predict_day, target_label)
-        loss_adv_target_night = bce_loss(adv_target_predict_night,
-                                         target_label)
-        # loss_adv_source = least_square_loss(adv_source_predict, source_label)
-        # loss_adv_target_day = least_square_loss(adv_target_predict_day,
-        #                                         target_label)
-        # loss_adv_target_night = least_square_loss(adv_target_predict_night,
-        #                                           target_label)
-
-        loss_adv = loss_adv_source + loss_adv_target_day + loss_adv_target_night  # noqa
-        loss_adv_source_value = loss_adv_source.item()
-        loss_adv_target_day_value = loss_adv_target_day.item()
-        loss_adv_target_night_value = loss_adv_target_night.item()
-        loss_adv.backward()
-        adv_optimizer.step()
-        adv_lr_updater.set_lr(adv_optimizer, i)
+        ###########################################################################################
 
         iter_time = time.time() - start_time
         eta = iter_time * (max_iters - i)
@@ -430,28 +455,25 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
         hours, minute = divmod(mins, 60)
         days, hour = divmod(hours, 24)
         ETA = f'{int(days)}天{int(hour)}小时{int(minute)}分{int(s)}秒'
-        print(
-            'Iter-[{0:5d}|{1:6d}] loss_adv_source: {2:.5f} loss_adv_target_day: {3:.5f} loss_adv_target_night: {4:.5f} loss_source_value: {5:.5f} loss_static_value: {6:.5f} lr_seg: {7:.5f} lr_adv: {8:.5f} ETA: {9} '  # noqa
-            .format(i, max_iters, loss_adv_source_value,
-                    loss_adv_target_day_value, loss_adv_target_night_value,
-                    loss_seg_value, loss_static_value,
-                    seg_optimizer.param_groups[0]['lr'],
-                    adv_optimizer.param_groups[0]['lr'], ETA))
 
-        if i % 4000 == 0 and i != 0:
+        if rank == 0:
+            print(
+                'Iter-[{0:5d}|{1:6d}] loss_adv_source: {2:.5f} loss_adv_target_day: {3:.5f} loss_adv_target_night: {4:.5f} loss_source_value: {5:.5f} loss_static_value: {6:.5f} lr_seg: {7:.5f} lr_adv_1: {8:.5f} lr_adv_2: {9:.5f} ETA: {10} '  # noqa
+                .format(i, max_iters, loss_adv_source_value, loss_d1.item(),
+                        loss_d2.item(), loss_seg_value, loss_static_value,
+                        seg_optimizer.param_groups[0]['lr'],
+                        adv_optimizer_1.param_groups[0]['lr'],
+                        adv_optimizer_2.param_groups[0]['lr'], ETA))
+
+        if i % 2000 == 0 and i != 0:
             print('taking snapshot ...')
             torch.save(model.state_dict(),
                        osp.join(work_dirs, f'segmentor_{i}.pth'))
 
-            torch.save(discriminator.state_dict(),
-                       osp.join(work_dirs, f'discriminator_{i}.pth'))
-            # results = single_gpu_test(MMDataParallel(model, device_ids=[0]),
-            #                           test_dataloader,
-            #                           pre_eval=True,
-            #                           format_only=False)
-            # metric = test_dataset.evaluate(results, metric='mIoU')
-            # print(metric)
-            # model.train()
+            torch.save(discriminator_1.state_dict(),
+                       osp.join(work_dirs, f'discriminator_1_{i}.pth'))
+            torch.save(discriminator_2.state_dict(),
+                       osp.join(work_dirs, f'discriminator_2_{i}.pth'))
 
 
 if __name__ == '__main__':
@@ -461,4 +483,4 @@ if __name__ == '__main__':
     mmcv.mkdir_or_exist(work_dirs)
     log_file = osp.join(work_dirs, f'{timestamp}.log')
     sys.stdout = Logger(log_file)
-    main(max_iters=80000, work_dirs=work_dirs, distributed=True)
+    main(max_iters=20000, work_dirs=work_dirs, distributed=True)
