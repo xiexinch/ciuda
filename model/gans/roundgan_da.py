@@ -46,7 +46,6 @@ class RoundGAN(BaseGAN):
             `direction` during testing: a2b | b2a.
         pretrained (str): Path for pretrained model. Default: None.
     """
-
     def __init__(self,
                  generator,
                  discriminator,
