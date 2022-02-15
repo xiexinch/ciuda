@@ -119,3 +119,6 @@ work_dirs/
 mmgen/configs/
 mmgen/tools/
 runs/
+results
+checkpoints
+.format_cityscapes
