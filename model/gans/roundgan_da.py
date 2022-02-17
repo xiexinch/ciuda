@@ -46,6 +46,7 @@ class RoundGAN(BaseGAN):
             `direction` during testing: a2b | b2a.
         pretrained (str): Path for pretrained model. Default: None.
     """
+
     def __init__(self,
                  generator,
                  discriminator,
@@ -248,9 +249,12 @@ class RoundGAN(BaseGAN):
 
         generators = self.get_module(self.generators)
 
-        fake_b = generators['a'](real_a)
-        fake_c = generators['c'](real_b)
-        fake_a = generators['b'](real_c)
+        # fake_b = generators['a'](real_a)
+        # fake_c = generators['c'](real_b)
+        # fake_a = generators['b'](real_c)
+        fake_c = generators['b'](generators['a'](real_a))
+        fake_a = generators['c'](generators['b'](real_b))
+        fake_b = generators['a'](generators['c'](real_c))
 
         results = dict(real_a=real_a.cpu(),
                        fake_b=fake_b.cpu(),

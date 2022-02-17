@@ -4,7 +4,7 @@ _base_ = [
     '../_base_/default_mmgen_runtime.py'
 ]
 test_cfg = dict(test_direction='a2b', show_input=False)
-dataroot = './data/city2darkziruch'
+dataroot = './data/city2darkzurich'
 data = dict(train=dict(dataroot=dataroot),
             val=dict(dataroot=dataroot),
             test=dict(dataroot=dataroot))
