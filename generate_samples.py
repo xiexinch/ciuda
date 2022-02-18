@@ -125,51 +125,53 @@ def main():
     _ = load_checkpoint(model, args.checkpoint, map_location='cpu')
     model = MMDataParallel(model, device_ids=[0])
 
-    generators = model.module.generators
-
-    test_dataset = build_dataset(cfg.data.test)
-    test_dataloader = build_dataloader(test_dataset,
-                                       samples_per_gpu=1,
-                                       workers_per_gpu=2,
-                                       num_gpus=1,
-                                       dist=False)
+    # test_dataset = build_dataset(cfg.data.test)
+    # test_dataloader = build_dataloader(test_dataset,
+    #                                    samples_per_gpu=1,
+    #                                    workers_per_gpu=2,
+    #                                    num_gpus=1,
+    #                                    dist=False)
 
     # img = mmcv.imread('aachen_000000_000019_leftImg8bit.png')
-    # test_pipeline = Compose(cfg.test_pipeline)
-    # img_path = 'aachen_000000_000019_leftImg8bit.png'
-    # device = next(model.parameters()).device
-    # data = dict(img_a_path=img_path, img_b_path=img_path, img_c_path=img_path) # noqa
-    # data = test_pipeline(data)
-    # data = scatter(collate([data], samples_per_gpu=1), [device])[0]
-    progress_bar = mmcv.ProgressBar(len(test_dataset))
-    for idx, data in enumerate(test_dataloader):
-        name = str(data['meta'].data[0][0]['img_a_path']).replace(
-            './data/city2darkzurich/testA\\', '')
-        dirname = os.path.dirname(name)
-        name = name.replace(dirname + '\\', '')
-        dirname = dirname.replace('\\', '/')
+    test_pipeline = Compose(cfg.test_pipeline)
+    img_path = 'aachen_000000_000019_leftImg8bit.png'
+    device = next(model.parameters()).device
+    data = dict(img_a_path=img_path, img_b_path=img_path,
+                img_c_path=img_path)  # noqa
+    data = test_pipeline(data)
+    data = scatter(collate([data], samples_per_gpu=1), [device])[0]
+    with torch.no_grad():
+        results = model(test_mode=True, **data)
 
-        with torch.no_grad():
-            results = model(test_mode=True, **data)
-        save_dir = os.path.dirname(args.save_path) + '/' + dirname
-        mmcv.mkdir_or_exist(save_dir)
-        utils.save_image((results['fake_c'][:, [2, 1, 0]] + 1.) / 2.,
-                         save_dir + '/' + name)
-        progress_bar.update()
+    # progress_bar = mmcv.ProgressBar(len(test_dataset))
+    # for idx, data in enumerate(test_dataloader):
+    #     name = str(data['meta'].data[0][0]['img_a_path']).replace(
+    #         './data/city2darkzurich/testA\\', '')
+    #     dirname = os.path.dirname(name)
+    #     name = name.replace(dirname + '\\', '')
+    #     dirname = dirname.replace('\\', '/')
+
+    #     with torch.no_grad():
+    #         results = model(test_mode=True, **data)
+    #     save_dir = os.path.dirname(args.save_path) + '/' + dirname
+    #     mmcv.mkdir_or_exist(save_dir)
+    #     utils.save_image((results['fake_c'][:, [2, 1, 0]] + 1.) / 2.,
+    #                      save_dir + '/' + name)
+    #     progress_bar.update()
 
     # print(results.keys())
     # fake_a = results['fake_a']
-    # fake_b = results['fake_b']
-    # fake_c = results['fake_c']
+    fake_b = results['fake_b']
+    fake_c = results['fake_c']
     # fake_a = (fake_a[:, [2, 1, 0]] + 1.) / 2.
-    # fake_b = (fake_b[:, [2, 1, 0]] + 1.) / 2.
-    # fake_c = (fake_c[:, [2, 1, 0]] + 1.) / 2.
+    fake_b = (fake_b[:, [2, 1, 0]] + 1.) / 2.
+    fake_c = (fake_c[:, [2, 1, 0]] + 1.) / 2.
 
     # save images
     # mmcv.mkdir_or_exist(os.path.dirname(args.save_path))
     # utils.save_image(fake_a, os.path.dirname(args.save_path) + 'fake_a.png')
-    # utils.save_image(fake_b, os.path.dirname(args.save_path) + 'fake_b.png')
-    # utils.save_image(fake_c, os.path.dirname(args.save_path) + 'fake_c.png')
+    utils.save_image(fake_b, os.path.dirname(args.save_path) + 'fake_b.png')
+    utils.save_image(fake_c, os.path.dirname(args.save_path) + 'fake_c.png')
 
 
 if __name__ == '__main__':
