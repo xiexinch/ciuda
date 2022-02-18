@@ -144,32 +144,18 @@ def main():
     progress_bar = mmcv.ProgressBar(len(test_dataset))
     for idx, data in enumerate(test_dataloader):
         name = str(data['meta'].data[0][0]['img_a_path']).replace(
-            './data/city2darkzurich/testA\\', '')
+            './data/city2darkzurich/testA/', '')
         dirname = os.path.dirname(name)
-        name = name.replace(dirname + '\\', '')
+        name = name.replace(dirname, '')
         dirname = dirname.replace('\\', '/')
-
         with torch.no_grad():
             results = model(test_mode=True, **data)
         save_dir = os.path.dirname(args.save_path) + '/' + dirname
+
         mmcv.mkdir_or_exist(save_dir)
         utils.save_image((results['fake_c'][:, [2, 1, 0]] + 1.) / 2.,
                          save_dir + '/' + name)
         progress_bar.update()
-
-    # print(results.keys())
-    # fake_a = results['fake_a']
-    # fake_b = results['fake_b']
-    # fake_c = results['fake_c']
-    # fake_a = (fake_a[:, [2, 1, 0]] + 1.) / 2.
-    # fake_b = (fake_b[:, [2, 1, 0]] + 1.) / 2.
-    # fake_c = (fake_c[:, [2, 1, 0]] + 1.) / 2.
-
-    # save images
-    # mmcv.mkdir_or_exist(os.path.dirname(args.save_path))
-    # utils.save_image(fake_a, os.path.dirname(args.save_path) + 'fake_a.png')
-    # utils.save_image(fake_b, os.path.dirname(args.save_path) + 'fake_b.png')
-    # utils.save_image(fake_c, os.path.dirname(args.save_path) + 'fake_c.png')
 
 
 if __name__ == '__main__':
