@@ -1,6 +1,6 @@
 _base_ = './pspnet_r50-d8_512x1024_40k_cityscapes.py'
 model = dict(pretrained='open-mmlab://resnet101_v1c', backbone=dict(depth=101))
-<<<<<<< HEAD
+
 
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
@@ -33,5 +33,3 @@ data = dict(
         img_dir='rgb_anon/val/night/GOPR0356',
         ann_dir='gt/val/night/GOPR0356',
         pipeline=test_pipeline))
-=======
->>>>>>> 48b38491ed3e682a23d3fcd582ff134cc05958bd
