@@ -33,9 +33,12 @@ class RoundImageDataset(Dataset):
     def __init__(self, dataroot, pipeline, test_mode=False):
         super().__init__()
         phase = 'test' if test_mode else 'train'
-        self.dataroot_a = osp.join(str(dataroot), phase + 'A')
-        self.dataroot_b = osp.join(str(dataroot), phase + 'B')
-        self.dataroot_c = osp.join(str(dataroot), phase + 'C')
+        # self.dataroot_a = osp.join(str(dataroot), phase + 'A')
+        # self.dataroot_b = osp.join(str(dataroot), phase + 'B')
+        # self.dataroot_c = osp.join(str(dataroot), phase + 'C')
+        self.dataroot_a = str(dataroot) + '/' + phase + 'A'
+        self.dataroot_b = str(dataroot) + '/' + phase + 'B'
+        self.dataroot_c = str(dataroot) + '/' + phase + 'C'
         self.data_infos_a = self.load_annotations(self.dataroot_a)
         self.data_infos_b = self.load_annotations(self.dataroot_b)
         self.data_infos_c = self.load_annotations(self.dataroot_c)

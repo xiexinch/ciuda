@@ -20,6 +20,7 @@ from mmseg.utils import collect_env, get_root_logger
 
 from model.backbone import RepVGG  # noqa
 from model.seg_head import RefineNet  # noqa
+from dataset import RCSCityscapesDataset  # noqa
 
 
 def parse_args():
