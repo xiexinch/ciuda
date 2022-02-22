@@ -176,7 +176,7 @@ class RoundGANV2(BaseGAN):
 
         return real_a, real_b, real_c, image_path
 
-    def forward_train(self, img_a, img_b, meta):
+    def forward_train(self, img_a, img_b, img_c, meta):
         """Forward function for training.
 
         Args:
@@ -188,7 +188,7 @@ class RoundGANV2(BaseGAN):
             dict: Dict of forward results for training.
         """
         # necessary setup
-        real_a, real_b, real_c, _ = self.setup(img_a, img_b, meta)
+        real_a, real_b, real_c, _ = self.setup(img_a, img_b, img_c, meta)
 
         generators = self.get_module(self.generators)
 
@@ -227,6 +227,7 @@ class RoundGANV2(BaseGAN):
     def forward_test(self,
                      img_a,
                      img_b,
+                     img_c,
                      meta,
                      save_image=False,
                      save_path=None,
@@ -253,7 +254,7 @@ class RoundGANV2(BaseGAN):
         self.train()
 
         # necessary setup
-        real_a, _, _, image_path = self.setup(img_a, img_b, meta)
+        real_a, _, _, image_path = self.setup(img_a, img_b, img_c, meta)
 
         generators = self.get_module(self.generators)
         fake_b = generators['a'](real_a)
