@@ -465,7 +465,7 @@ class RoundGANV2(BaseGAN):
 
         # GAN loss for generators['d']
         fake_pred = discriminators['b'](outputs['fake_b_'])
-        losses['loss_gan_g_b_'] = self.gan_loss(fake_pred,
+        losses['loss_gan_g_d_'] = self.gan_loss(fake_pred,
                                                target_is_real=True,
                                                is_disc=False)
 
@@ -476,16 +476,16 @@ class RoundGANV2(BaseGAN):
         losses['loss_cycle_b'] = self.cycle_loss(outputs['rec_b'],
                                                  outputs['real_b'])
         # Backward cycle loss
-        losses['loss_cycle_b'] = self.cycle_loss(outputs['rec_c'],
+        losses['loss_cycle_c'] = self.cycle_loss(outputs['rec_c'],
                                                  outputs['real_c'])            
         # Forward cycle loss
-        losses['loss_cycle_a'] = self.cycle_loss(outputs['rec_a_'],
+        losses['loss_cycle_a_'] = self.cycle_loss(outputs['rec_a_'],
                                                  outputs['real_a'])
         # Backward cycle loss
-        losses['loss_cycle_b'] = self.cycle_loss(outputs['rec_b_'],
+        losses['loss_cycle_b_'] = self.cycle_loss(outputs['rec_b_'],
                                                  outputs['real_b'])
         # Backward cycle loss
-        losses['loss_cycle_b'] = self.cycle_loss(outputs['rec_c_'],
+        losses['loss_cycle_c_'] = self.cycle_loss(outputs['rec_c_'],
                                                  outputs['real_c'])
                                             
         if self.cx_loss is not None:
