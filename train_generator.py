@@ -16,8 +16,9 @@ from mmgen.datasets import build_dataset
 from mmgen.models import build_model
 from mmgen.utils import collect_env, get_root_logger
 
-from model.gans import RoundGAN  # noqa
+from model.gans import RoundGAN, RoundGANV2  # noqa
 from dataset import RoundImageDataset  # noqa
+from model.losses import ContexturalLoss, ContextualBilateralLoss # noqa
 
 
 def parse_args():
