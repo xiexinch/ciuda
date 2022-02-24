@@ -10,6 +10,7 @@ model = dict(
     type='EncoderDecoder',
     backbone=dict(type='PositionEncodingResNet',
                   img_size=(512, 1024),
+                  patch_size=16,
                   resnet_cfg=dict(
                       type='ResNetV1c',
                       in_channels=3,
