@@ -9,7 +9,7 @@ norm_cfg = dict(type='BN', requires_grad=True)
 model = dict(
     type='EncoderDecoder',
     backbone=dict(type='PositionEncodingResNet',
-                  img_size=(1024, 512),
+                  img_size=(512, 1024),
                   resnet_cfg=dict(
                       type='ResNetV1c',
                       in_channels=1,
