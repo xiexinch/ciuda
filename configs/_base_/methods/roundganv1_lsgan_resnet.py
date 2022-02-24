@@ -1,4 +1,4 @@
-model = dict(type='CycleGAN',
+model = dict(type='RoundGAN',
              generator=dict(type='ResnetGenerator',
                             in_channels=3,
                             out_channels=3,

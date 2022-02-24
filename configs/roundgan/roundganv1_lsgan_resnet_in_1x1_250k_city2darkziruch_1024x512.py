@@ -1,6 +1,6 @@
 _base_ = [
-    '../_base_/methods/cyclegan_lsgan_resnet.py',
-    '../_base_/datasets/mmgen_unpaired_imgs_1024x512.py',
+    '../_base_/methods/roundganv1_lsgan_resnet.py',
+    '../_base_/datasets/unpaired_imgs_1024x512.py',
     '../_base_/default_mmgen_runtime.py'
 ]
 test_cfg = dict(test_direction='a2b', show_input=False)
@@ -26,7 +26,7 @@ runner = None
 use_ddp_wrapper = True
 total_iters = 250000
 workflow = [('train', 1)]
-exp_name = 'cyclegan_city2darkzurich'
+exp_name = 'roundgan_city2darkzurich'
 work_dir = f'./work_dirs/experiments/{exp_name}'
 # testA: 309, testB:238
 metrics = dict(FID=dict(type='FID',
