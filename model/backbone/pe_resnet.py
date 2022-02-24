@@ -6,7 +6,7 @@ from mmseg.ops import resize
 
 def pos_size(img_size):
     h, w = img_size
-    return tuple(1, 3, h, w)
+    return tuple((1, 3, h, w))
 
 @BACKBONES.register_module()
 class PositionEncodingResNet(BaseModule):
@@ -18,6 +18,7 @@ class PositionEncodingResNet(BaseModule):
         self.backbone = build_backbone(resnet_cfg)
 
     def forward(self, inputs):
+
         if inputs.shape[2:] != self.pos_embed.shape[2:]:
             pos_emb = resize(self.pos_embed, size=inputs.shape[2:], mode='bicubic', align_corners=False)
         else:
