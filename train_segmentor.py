@@ -18,7 +18,7 @@ from mmseg.datasets import build_dataset
 from mmseg.models import build_segmentor
 from mmseg.utils import collect_env, get_root_logger
 
-from model.backbone import RepVGG  # noqa
+from model.backbone import RepVGG, PositionEncodingResNet  # noqa
 from model.seg_head import RefineNet  # noqa
 from dataset import RCSCityscapesDataset  # noqa
 
