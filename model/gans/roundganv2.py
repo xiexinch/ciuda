@@ -176,7 +176,7 @@ class RoundGANV2(BaseGAN):
 
         return real_a, real_b, real_c, image_path
 
-    def forward_train(self, img_a, img_b, meta):
+    def forward_train(self, img_a, img_b, img_c, meta):
         """Forward function for training.
 
         Args:
@@ -188,7 +188,7 @@ class RoundGANV2(BaseGAN):
             dict: Dict of forward results for training.
         """
         # necessary setup
-        real_a, real_b, real_c, _ = self.setup(img_a, img_b, meta)
+        real_a, real_b, real_c, _ = self.setup(img_a, img_b, img_c, meta)
 
         generators = self.get_module(self.generators)
 
@@ -227,6 +227,7 @@ class RoundGANV2(BaseGAN):
     def forward_test(self,
                      img_a,
                      img_b,
+                     img_c,
                      meta,
                      save_image=False,
                      save_path=None,
@@ -253,7 +254,7 @@ class RoundGANV2(BaseGAN):
         self.train()
 
         # necessary setup
-        real_a, _, _, image_path = self.setup(img_a, img_b, meta)
+        real_a, _, _, image_path = self.setup(img_a, img_b, img_c, meta)
 
         generators = self.get_module(self.generators)
         fake_b = generators['a'](real_a)
@@ -464,7 +465,7 @@ class RoundGANV2(BaseGAN):
 
         # GAN loss for generators['d']
         fake_pred = discriminators['b'](outputs['fake_b_'])
-        losses['loss_gan_g_b_'] = self.gan_loss(fake_pred,
+        losses['loss_gan_g_d_'] = self.gan_loss(fake_pred,
                                                target_is_real=True,
                                                is_disc=False)
 
@@ -475,16 +476,16 @@ class RoundGANV2(BaseGAN):
         losses['loss_cycle_b'] = self.cycle_loss(outputs['rec_b'],
                                                  outputs['real_b'])
         # Backward cycle loss
-        losses['loss_cycle_b'] = self.cycle_loss(outputs['rec_c'],
+        losses['loss_cycle_c'] = self.cycle_loss(outputs['rec_c'],
                                                  outputs['real_c'])            
         # Forward cycle loss
-        losses['loss_cycle_a'] = self.cycle_loss(outputs['rec_a_'],
+        losses['loss_cycle_a_'] = self.cycle_loss(outputs['rec_a_'],
                                                  outputs['real_a'])
         # Backward cycle loss
-        losses['loss_cycle_b'] = self.cycle_loss(outputs['rec_b_'],
+        losses['loss_cycle_b_'] = self.cycle_loss(outputs['rec_b_'],
                                                  outputs['real_b'])
         # Backward cycle loss
-        losses['loss_cycle_b'] = self.cycle_loss(outputs['rec_c_'],
+        losses['loss_cycle_c_'] = self.cycle_loss(outputs['rec_c_'],
                                                  outputs['real_c'])
                                             
         if self.cx_loss is not None:

@@ -47,7 +47,6 @@ class ContextualBilateralLoss(nn.Module):
         self.weight_sp = weight_sp
         self.band_width = band_width
         self._loss_name = 'cx_loss'
-    
     def forward(self, x: torch.Tensor, y: torch.Tensor):
         assert x.size() == y.size(), 'input tensor must have the same size.'
         # spatial loss
