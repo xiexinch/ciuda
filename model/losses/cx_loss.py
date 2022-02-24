@@ -21,6 +21,7 @@ class ContexturalLoss(nn.Module):
         assert loss_type in LOSS_TYPES, f'select a loss type from {LOSS_TYPES}.'
         self.loss_type = loss_type
         self.band_width = band_width
+        self._loss_name = 'cx_loss'
 
     def forward(self, x: torch.Tensor, y: torch.Tensor):
         assert x.size() == y.size(), 'input tensor must have the same size.'
@@ -40,10 +41,13 @@ class ContexturalLoss(nn.Module):
 @MODULES.register_module()
 class ContextualBilateralLoss(nn.Module):
     def __init__(self, weight_sp=0.1, band_width=1., loss_type='cosine'):
+        super().__init__()
         assert loss_type in LOSS_TYPES, f'select a loss type from {LOSS_TYPES}.'
         self.loss_type = loss_type
         self.weight_sp = weight_sp
         self.band_width = band_width
+        self._loss_name = 'cx_loss'
+    
     def forward(self, x: torch.Tensor, y: torch.Tensor):
         assert x.size() == y.size(), 'input tensor must have the same size.'
         # spatial loss
