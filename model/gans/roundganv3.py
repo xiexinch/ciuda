@@ -18,6 +18,8 @@ from mmgen.models.builder import MODULES
 from realesrgan import RealESRGANer
 from basicsr.archs.rrdbnet_arch import RRDBNet
 
+from mmseg.ops import resize
+
 @MODELS.register_module()
 class RoundGANV3(BaseGAN):
     """CycleGAN model for unpaired image-to-image translation.
@@ -140,9 +142,9 @@ class RoundGANV3(BaseGAN):
         self.generators['b'].init_weights(pretrained=pretrained)
         self.generators['c'].init_weights(pretrained=pretrained)
 
-        self.discriminators['a'].init_weights(pretrained=pretrained)
-        self.discriminators['b'].init_weights(pretrained=pretrained)
-        self.discriminators['c'].init_weights(pretrained=pretrained)
+        self.discriminators['a'].init_weights()
+        self.discriminators['b'].init_weights()
+        self.discriminators['c'].init_weights()
 
     def get_module(self, module):
         """Get `nn.ModuleDict` to fit the `MMDistributedDataParallel`
@@ -557,8 +559,9 @@ class RoundGANV3(BaseGAN):
 class BilateralGenerator(nn.Module):
 
     def __init__(self, unet_generator_cfg, rrdb_generator_cfg, rrdb_pretrained=None):
+        super().__init__()
         self.unet_generator = build_module(unet_generator_cfg)
-        self.rrdb_generator = RRDBNet(*rrdb_generator_cfg)
+        self.rrdb_generator = RRDBNet(**rrdb_generator_cfg)
         self.a1 = nn.Parameter(torch.Tensor([0.5]))
         self.a2 = nn.Parameter(torch.Tensor([0.5]))
 
@@ -566,12 +569,21 @@ class BilateralGenerator(nn.Module):
         self.init_weights()
     
     def init_weights(self, pretrained=None):
+
+        loadnet = torch.load(self.rrdb_pretrained, map_location=torch.device('cpu'))
+        # prefer to use params_ema
+        if 'params_ema' in loadnet:
+            keyname = 'params_ema'
+        else:
+            keyname = 'params'
+        self.rrdb_generator.load_state_dict(loadnet[keyname], strict=True)
+
         self.unet_generator.init_weights(pretrained=pretrained)
-        if self.rrdb_pretrained is not None:
-            load_checkpoint(self.rrdb_generator, self.rrdb_pretrained)
+
     
     def forward(self, img: torch.Tensor):
         fake_img = self.unet_generator(img)
+        img = F.interpolate(img, scale_factor=0.25, mode='bicubic', align_corners=False)
         sr_img = self.rrdb_generator(img)
         out = self.a1 * fake_img + self.a2 * sr_img
         return out
@@ -606,6 +618,20 @@ class UNetDiscriminatorSN(nn.Module):
         self.conv7 = norm(nn.Conv2d(num_feat, num_feat, 3, 1, 1, bias=False))
         self.conv8 = norm(nn.Conv2d(num_feat, num_feat, 3, 1, 1, bias=False))
         self.conv9 = nn.Conv2d(num_feat, 1, 3, 1, 1)
+
+    def init_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_uniform_(m.weight, mode='fan_out')
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.Linear):
+                nn.init.normal_(m.weight, 0, 0.01)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
         # downsample

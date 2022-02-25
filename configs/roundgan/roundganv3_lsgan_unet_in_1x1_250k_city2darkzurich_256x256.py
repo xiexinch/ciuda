@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/datasets/unpaired_imgs_1024x512.py',
+    '../_base_/datasets/unpaired_imgs_256x256.py',
     '../_base_/default_mmgen_runtime.py'
 ]
 
@@ -60,7 +60,7 @@ checkpoint_config = dict(interval=10000, save_optimizer=True, by_epoch=False)
 custom_hooks = [
     dict(type='MMGenVisualizationHook',
          output_dir='training_samples',
-         res_name_list=['fake_b', 'fake_c', 'rec_c'],
+         res_name_list=['fake_b','fake_c'],
          interval=5000)
 ]
 

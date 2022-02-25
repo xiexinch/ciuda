@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/datasets/unpaired_imgs_1024x512.py',
+    '../_base_/datasets/unpaired_imgs_512x256.py',
     '../_base_/default_mmgen_runtime.py'
 ]
 
