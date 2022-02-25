@@ -16,6 +16,7 @@ from mmgen.utils import get_root_logger
 
 from model.gans import RoundGAN  # noqa
 from dataset import RoundImageDataset  # noqa
+from mmseg.ops import resize
 
 
 def parse_args():
@@ -123,7 +124,7 @@ def main():
     model.eval()
 
     _ = load_checkpoint(model, args.checkpoint, map_location='cpu')
-    model = MMDataParallel(model, device_ids=[0])
+    model = MMDataParallel(model.cuda(), device_ids=[0])
 
     test_dataset = build_dataset(cfg.data.test)
     test_dataloader = build_dataloader(test_dataset,
@@ -142,20 +143,24 @@ def main():
     # data = scatter(collate([data], samples_per_gpu=1), [device])[0]
     progress_bar = mmcv.ProgressBar(len(test_dataset))
     for idx, data in enumerate(test_dataloader):
-        name = str(data['meta'].data[0][0]['img_a_path']).replace(
+        name = str(data['meta'].data[0][0]['img_day_path']).replace(
             './data/city2darkzurich/testA/', '')
         dirname = os.path.dirname(name)
         name = name.replace(dirname, '')
         dirname = dirname.replace('\\', '/')
         with torch.no_grad():
-            results = model(test_mode=True, **data)
+            # results = model(test_mode=True, **data)
+            results = model(img=data['img_day'], target_domain='night')
+            results['target'] = resize(results['target'],
+                                       size=[1024, 2048],
+                                       mode='bicubic',
+                                       align_corners=False)
         save_dir = os.path.dirname(args.save_path) + '/' + dirname
 
         mmcv.mkdir_or_exist(save_dir)
-        utils.save_image((results['fake_c'][:, [2, 1, 0]] + 1.) / 2.,
+        utils.save_image((results['target'][:, [2, 1, 0]] + 1.) / 2.,
                          save_dir + '/' + name)
         progress_bar.update()
-
 
 
 if __name__ == '__main__':
