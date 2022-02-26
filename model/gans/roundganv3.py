@@ -563,7 +563,7 @@ class BilateralGenerator(nn.Module):
         self.unet_generator = build_module(unet_generator_cfg)
         self.rrdb_generator = RRDBNet(**rrdb_generator_cfg)
         self.a1 = nn.Parameter(torch.Tensor([0.5]))
-        self.a2 = nn.Parameter(torch.Tensor([0.5]))
+
 
         self.rrdb_pretrained = rrdb_pretrained
         self.init_weights()
@@ -582,10 +582,12 @@ class BilateralGenerator(nn.Module):
 
     
     def forward(self, img: torch.Tensor):
+        self.a1.data = torch.clamp(self.a1, min=0, max=1.0)
+        a2 = 1 - self.a1
         fake_img = self.unet_generator(img)
         img = F.interpolate(img, scale_factor=0.25, mode='bicubic', align_corners=False)
         sr_img = self.rrdb_generator(img)
-        out = self.a1 * fake_img + self.a2 * sr_img
+        out = self.a1 * fake_img + a2 * sr_img
         return out
 
 @MODULES.register_module()
