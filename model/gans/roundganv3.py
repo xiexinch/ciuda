@@ -436,7 +436,7 @@ class RoundGANV3(BaseGAN):
             losses['loss_id_b'] = self.id_loss(
                 id_b, outputs['real_c']) * self.cycle_loss.loss_weight
             id_c = generators['c'](outputs['real_a'])
-            losses['loss_id_b'] = self.id_loss(
+            losses['loss_id_c'] = self.id_loss(
                 id_c, outputs['real_a']) * self.cycle_loss.loss_weight
 
         # GAN loss for generators['a']
@@ -665,3 +665,37 @@ class UNetDiscriminatorSN(nn.Module):
         out = self.conv9(out)
 
         return out
+
+@MODULES.register_module()
+class RRDBGenerator(nn.Module):
+    def __init__(self, rrdb_generator_cfg, rrdb_pretrained=None):
+        super().__init__()
+        self.rrdb_generator = RRDBNet(**rrdb_generator_cfg)
+        self.rrdb_pretrained = rrdb_pretrained
+        self.init_weights()
+    
+    def init_weights(self, pretrained=None):
+        if self.rrdb_pretrained is not None:
+            loadnet = torch.load(self.rrdb_pretrained)
+            # prefer to use params_ema
+            if 'params_ema' in loadnet:
+                keyname = 'params_ema'
+            else:
+                keyname = 'params'
+            self.rrdb_generator.load_state_dict(loadnet[keyname], strict=True)
+        else:
+            for m in self.modules():
+                if isinstance(m, nn.Conv2d):
+                    nn.init.kaiming_uniform_(m.weight, mode='fan_out')
+                    if m.bias is not None:
+                        nn.init.constant_(m.bias, 0)
+                elif isinstance(m, nn.BatchNorm2d):
+                    nn.init.constant_(m.weight, 1)
+                    nn.init.constant_(m.bias, 0)
+                elif isinstance(m, nn.Linear):
+                    nn.init.normal_(m.weight, 0, 0.01)
+                    if m.bias is not None:
+                        nn.init.constant_(m.bias, 0)
+
+    def forward(self, img):
+        return self.rrdb_generator(F.interpolate(img, scale_factor=0.25, mode='bicubic', align_corners=False))
