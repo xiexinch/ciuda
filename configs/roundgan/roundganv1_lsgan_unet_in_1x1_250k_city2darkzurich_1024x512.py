@@ -51,15 +51,15 @@ checkpoint_config = dict(interval=10000, save_optimizer=True, by_epoch=False)
 custom_hooks = [
     dict(type='MMGenVisualizationHook',
          output_dir='training_samples',
-         res_name_list=['fake_b','fake_c', 'rec_c'],
-         interval=5000)
+         res_name_list=['real_a','fake_b', 'real_b', 'fake_c', 'real_c', 'rec_c'],
+         interval=1000)
 ]
 
 runner = None
 use_ddp_wrapper = True
 total_iters = 250000
 workflow = [('train', 1)]
-exp_name = 'roundganv1_lsgan_unet_in_1x1_250k_city2darkzurich_1024x512.py'
+exp_name = 'roundganv1_lsgan_unet_in_1x1_250k_city2darkzurich_1024x512_nopercept'
 work_dir = f'./work_dirs/experiments/{exp_name}'
 # testA: 309, testB:238
 metrics = dict(FID=dict(type='FID',

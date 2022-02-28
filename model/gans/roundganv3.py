@@ -103,7 +103,7 @@ class RoundGANV3(BaseGAN):
         assert cycle_loss is not None  # cycle loss cannot be None
         self.cycle_loss = build_module(cycle_loss)
         self.id_loss = build_module(id_loss) if id_loss else None
-        self.perceptual_loss = build_module(perceptual_loss)
+        # self.perceptual_loss = build_module(perceptual_loss)
 
         # others
         self.disc_steps = 1 if self.train_cfg is None else self.train_cfg.get(
@@ -465,9 +465,9 @@ class RoundGANV3(BaseGAN):
                                                  outputs['real_c'])
 
         # Perceptual loss
-        losses['loss_percep_a'], _ = self.perceptual_loss(outputs['rec_a'], outputs['real_a'])
-        losses['loss_percep_b'], _ = self.perceptual_loss(outputs['rec_b'], outputs['real_b'])
-        losses['loss_percep_c'], _ = self.perceptual_loss(outputs['rec_c'], outputs['real_c'])
+        # losses['loss_percep_a'], _ = self.perceptual_loss(outputs['rec_a'], outputs['real_a'])
+        # losses['loss_percep_b'], _ = self.perceptual_loss(outputs['rec_b'], outputs['real_b'])
+        # losses['loss_percep_c'], _ = self.perceptual_loss(outputs['rec_c'], outputs['real_c'])
 
 
         loss_g, log_vars_g = self._parse_losses(losses)
@@ -520,10 +520,13 @@ class RoundGANV3(BaseGAN):
         results = dict(log_vars=log_vars,
                        num_samples=len(outputs['real_a']),
                        results=dict(real_a=outputs['real_a'].cpu(),
+                                    rec_a=outputs['rec_a'].cpu(),
                                     fake_b=outputs['fake_b'].cpu(),
                                     real_b=outputs['real_b'].cpu(),
+                                    rec_b=outputs['rec_b'].cpu(),
                                     fake_a=outputs['fake_a'].cpu(),
                                     real_c=outputs['real_c'].cpu(),
+                                    rec_c=outputs['rec_c'].cpu(),
                                     fake_c=outputs['fake_c'].cpu()))
 
         return results
