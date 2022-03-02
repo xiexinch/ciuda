@@ -58,5 +58,5 @@ class ZurichPairDataset(data.Dataset):
             image_d = self.transform(image_d)
 
         size = image_n.shape
-        return image_n, image_d, np.array(size), name
+        return image_d, image_n,  np.array(size), name
 

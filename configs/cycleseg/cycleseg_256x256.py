@@ -1,5 +1,4 @@
 _base_ = [
-    '../_base_/datasets/unpaired_imgs_769x769.py',
     '../_base_/default_mmgen_runtime.py'
 ]
 norm_cfg = dict(type='SyncBN', requires_grad=True)
@@ -79,23 +78,11 @@ model = dict(type='CycleSeg',
                     align_corners=False,
                     loss_decode=dict(
                         type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0)),
-                auxiliary_head=dict(
-                    type='FCNHead',
-                    in_channels=1024,
-                    in_index=2,
-                    channels=256,
-                    num_convs=1,
-                    concat_input=False,
-                    dropout_ratio=0.1,
-                    num_classes=19,
-                    norm_cfg=norm_cfg,
-                    align_corners=False,
-                    loss_decode=dict(
-                        type='CrossEntropyLoss', use_sigmoid=False, loss_weight=0.4)),
                 # model training and testing settings
                 train_cfg=dict(),
                 test_cfg=dict(mode='whole')),
-             
+             ce_loss=dict(
+                        type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
              gan_loss=dict(type='GANLoss',
                            gan_type='lsgan',
                            real_label_val=1.0,
@@ -108,9 +95,15 @@ model = dict(type='CycleSeg',
              pretrained_seg_n='checkpoints/')
 
 dataroot = './data/city2darkziruch'
-data = dict(train=dict(dataroot=dataroot),
-            val=dict(dataroot=dataroot),
-            test=dict(dataroot=dataroot))
+data = dict(train=dict(
+                    type='ZurichPairDataset',
+                    input_size_target=(960, 540),
+                    input_size=(1024, 512),
+                    list_path='dataset/lists/zurich_dn_pair_train.csv',
+                    max_iters=250000
+                    ),
+            val=None,
+            test=None)
 
 optimizer = dict(generators=dict(type='Adam', lr=0.0002, betas=(0.5, 0.999)),
                  discriminators=dict(type='Adam',
