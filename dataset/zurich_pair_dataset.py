@@ -6,16 +6,17 @@ from dataset.transforms import *
 import torchvision.transforms as standard_transforms
 
 from mmgen.datasets.builder import DATASETS
+from mmcv.parallel import DataContainer
 
 @DATASETS.register_module()
 class ZurichPairDataset(data.Dataset):
-    def __init__(self, args, root, list_path, max_iters=None, set='train', joint_transform=None):
+    def __init__(self, input_size_target, input_size,  root, list_path, max_iters=None, set='train', joint_transform=None):
         self.root = root
         self.list_path = list_path
 
-        zurich_transform_list = [joint_transforms2.RandomSizeAndCrop(args.input_size_target, False, pre_size=None,
+        zurich_transform_list = [joint_transforms2.RandomSizeAndCrop(input_size_target, False, pre_size=None,
                                                                      scale_min=0.9, scale_max=1.1, ignore_index=255),
-                                 joint_transforms2.Resize(args.input_size),
+                                 joint_transforms2.Resize(input_size),
                                  joint_transforms2.RandomHorizontallyFlip()]
         self.joint_transform = joint_transforms2.Compose(zurich_transform_list)
 
@@ -58,5 +59,7 @@ class ZurichPairDataset(data.Dataset):
             image_d = self.transform(image_d)
 
         size = image_n.shape
-        return image_d, image_n,  np.array(size), name
 
+        _data = dict(img_day=image_d, img_night=image_n, meta=name)
+
+        return  DataContainer(_data)

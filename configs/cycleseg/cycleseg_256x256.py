@@ -1,4 +1,5 @@
 _base_ = [
+    '../_base_/datasets/mmgen_unpaired_imgs_256x256.py',
     '../_base_/default_mmgen_runtime.py'
 ]
 norm_cfg = dict(type='SyncBN', requires_grad=True)
@@ -91,26 +92,93 @@ model = dict(type='CycleSeg',
              cycle_loss=dict(type='L1Loss', loss_weight=10.0,
                              reduction='mean'),
              id_loss=dict(type='L1Loss', loss_weight=0.5, reduction='mean'),
-             pretrained_seg_d='checkpoints/',
-             pretrained_seg_n='checkpoints/')
+             pretrained_seg_d='checkpoints/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth',
+             pretrained_seg_n='checkpoints/pspnet_r101-d8_512x1024_80k_cityscapes_20200606_112211-e1e1100f.pth')
+train_cfg = dict(direction='a2b', buffer_size=10)
+test_cfg = dict(direction='a2b', show_input=True)
 
-dataroot = './data/city2darkziruch'
-data = dict(train=dict(
-                    type='ZurichPairDataset',
-                    input_size_target=(960, 540),
-                    input_size=(1024, 512),
-                    list_path='dataset/lists/zurich_dn_pair_train.csv',
-                    max_iters=250000
-                    ),
-            val=None,
-            test=None)
+domain_a = 'day'  # set by user
+domain_b = 'night'  # set by user
+dataroot = './data/city2darkzurich'
+train_pipeline = [
+    dict(
+        type='LoadImageFromFile',
+        io_backend='disk',
+        key=f'img_{domain_a}',
+        flag='color'),
+    dict(
+        type='LoadImageFromFile',
+        io_backend='disk',
+        key=f'img_{domain_b}',
+        flag='color'),
+    dict(
+        type='Resize',
+        keys=[f'img_{domain_a}', f'img_{domain_b}'],
+        scale=(1920, 1080),
+        interpolation='bicubic'),
+    dict(
+        type='Crop',
+        keys=[f'img_{domain_a}', f'img_{domain_b}'],
+        crop_size=(256, 512),
+        random_crop=True),
+    dict(type='Flip', keys=[f'img_{domain_a}'], direction='horizontal'),
+    dict(type='Flip', keys=[f'img_{domain_b}'], direction='horizontal'),
+    dict(type='RescaleToZeroOne', keys=[f'img_{domain_a}', f'img_{domain_b}']),
+    dict(
+        type='Normalize',
+        keys=[f'img_{domain_a}', f'img_{domain_b}'],
+        to_rgb=False,
+        mean=[0.5, 0.5, 0.5],
+        std=[0.5, 0.5, 0.5]),
+    dict(type='ImageToTensor', keys=[f'img_{domain_a}', f'img_{domain_b}']),
+    dict(
+        type='Collect',
+        keys=[f'img_{domain_a}', f'img_{domain_b}'],
+        meta_keys=[f'img_{domain_a}_path', f'img_{domain_b}_path'])
+]
+dataroot = './data/city2darkzurich'
+data = dict(samples_per_gpu=2,
+            workers_per_gpu=4,
+            train=dict(dataroot=dataroot, domain_a=domain_a, domain_b=domain_b, pipeline=train_pipeline),
+            val=dict(dataroot=dataroot, domain_a=domain_a, domain_b=domain_b),
+            test=dict(dataroot=dataroot, domain_a=domain_a, domain_b=domain_b))
+
+# img_norm_cfg = dict(mean=[123.675, 116.28, 103.53],
+#                     std=[58.395, 57.12, 57.375],
+#                     to_rgb=True)
+# target_crop_size = (540, 960)
+# target_train_pipeline = [
+#     dict(type='LoadImageFromFile'),
+#     # dict(type='LoadAnnotations'),
+#     dict(type='Resize', img_scale=(1920, 1080), ratio_range=(0.5, 2.0)),
+#     # dict(type='Resize', img_scale=target_crop_size, ratio_range=(0.5, 2.0)),
+#     dict(type='RandomCrop', crop_size=target_crop_size, cat_max_ratio=0.75),
+#     dict(type='RandomFlip', prob=0.5),
+#     dict(type='PhotoMetricDistortion'),
+#     dict(type='Normalize', **img_norm_cfg),
+#     dict(type='Pad', size=target_crop_size, pad_val=0, seg_pad_val=255),
+#     dict(type='DefaultFormatBundle'),
+#     dict(type='Collect', keys=['img']),
+# ]
+
+# data = dict(samples_per_gpu=1,
+#             workers_per_gpu=8,
+#             train=dict(
+#                 type='ZurichPairDataset',
+#                 data_root='data/dark_zurich/train/rgb_anon',
+#                 pair_list_path='configs/_base_/datasets/zurich_dn_pair_train.csv',
+#                 pipeline=target_train_pipeline,
+#                 repeat_times=500),
+#             val=None,
+#             test=None)
 
 optimizer = dict(generators=dict(type='Adam', lr=0.0002, betas=(0.5, 0.999)),
                  discriminators=dict(type='Adam',
                                      lr=0.0002,
                                      betas=(0.5, 0.999)),
                  segmentor_n=dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0005))
-lr_config = None
+lr_config = dict(
+    policy='Linear', by_epoch=False, target_lr=0, start=125000, interval=1250)
 checkpoint_config = dict(interval=10000, save_optimizer=True, by_epoch=False)
 custom_hooks = [
     dict(type='MMGenVisualizationHook',
