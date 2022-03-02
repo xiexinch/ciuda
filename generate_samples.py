@@ -152,7 +152,7 @@ def main():
         save_dir = os.path.dirname(args.save_path) + '/' + dirname
 
         mmcv.mkdir_or_exist(save_dir)
-        utils.save_image((results['fake_c'][:, [2, 1, 0]] + 1.) / 2.,
+        utils.save_image((results['fake_b'][:, [2, 1, 0]] + 1.) / 2.,
                          save_dir + '/' + name)
         progress_bar.update()
 

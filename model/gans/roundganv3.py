@@ -256,21 +256,18 @@ class RoundGANV3(BaseGAN):
         self.train()
 
         # necessary setup
-        real_a, real_b, real_c, image_path = self.setup(
+        real_a, _, _, image_path = self.setup(
             img_a, img_b, img_c, meta)
 
         generators = self.get_module(self.generators)
 
-        fake_c = generators['b'](generators['a'](real_a))
-
         fake_b = generators['a'](real_a)
+        fake_c = generators['b'](fake_b)
+
 
         results = dict(
             real_a=real_a.cpu(),
             fake_b=fake_b.cpu(),
-            real_b=real_b.cpu(),
-            #    fake_a=fake_a.cpu(),
-            real_c=real_c.cpu(),
             fake_c=fake_c.cpu())
 
         # save image
