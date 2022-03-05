@@ -95,9 +95,12 @@ model = dict(
     # pretrained_seg_d=
     # 'checkpoints/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth',
     # pretrained_seg_n=
-    # 'checkpoints/pspnet_r101-d8_512x1024_80k_cityscapes_20200606_112211-e1e1100f.pth'
+    # 'checkpoints/pspnet_r101-d8_512x1024_80k_cityscapes_20200606_112211-e1e1100f.pth',
+    # pretrained_generator='checkpoints/iter_250000.pth',
+    pretrained='checkpoints/iter_250000.pth',
     pretrained_seg_d=None,
-    pretrained_seg_n=None)
+    pretrained_seg_n=None,
+)
 train_cfg = dict(direction='a2b', buffer_size=10)
 test_cfg = dict(direction='a2b', show_input=True)
 
