@@ -59,6 +59,7 @@ class CycleSeg(BaseGAN):
                  cycle_loss,
                  ce_loss,
                  id_loss=None,
+                 perceptual_loss=None,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
@@ -104,6 +105,7 @@ class CycleSeg(BaseGAN):
         self.cycle_loss = build_module(cycle_loss)
         self.id_loss = build_module(id_loss) if id_loss else None
         self.ce_loss = build_seg_loss(ce_loss)
+        self.perceptual_loss = build_module(perceptual_loss)
 
         # others
         self.disc_steps = 1 if self.train_cfg is None else self.train_cfg.get(
@@ -395,14 +397,14 @@ class CycleSeg(BaseGAN):
             losses['loss_id_b'] = self.id_loss(
                 id_b, outputs['real_day']) * self.cycle_loss.loss_weight
 
-        # GAN loss for generators['day']
+        # GAN loss for generators['a']
         fake_pred = discriminators['day'](outputs['fake_night'])
-        losses['loss_gan_g_a'] = self.gan_loss(fake_pred,
+        losses['loss_gan_g_a'] = 0.01 * self.gan_loss(fake_pred,
                                                target_is_real=True,
                                                is_disc=False)
-        # GAN loss for generators['night']
+        # GAN loss for generators['b']
         fake_pred = discriminators['night'](outputs['fake_day'])
-        losses['loss_gan_g_b'] = self.gan_loss(fake_pred,
+        losses['loss_gan_g_b'] = 0.01 * self.gan_loss(fake_pred,
                                                target_is_real=True,
                                                is_disc=False)
         # Backward cycle loss
@@ -420,6 +422,10 @@ class CycleSeg(BaseGAN):
         losses['loss_seg_d'] = self.ce_loss(outputs['seg_pred_night_f'],
                                             label_d)
         losses['loss_seg_n'] = self.ce_loss(outputs['seg_pred_night'], label_n)
+
+        # Perceptual loss
+        losses['loss_percep_a'], _ = self.perceptual_loss(outputs['rec_day'], outputs['real_day'])
+        losses['loss_percep_b'], _ = self.perceptual_loss(outputs['rec_night'], outputs['real_night'])
 
         loss_g, log_vars_g = self._parse_losses(losses)
         loss_g.backward()
