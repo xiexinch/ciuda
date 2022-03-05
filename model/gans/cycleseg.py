@@ -396,12 +396,12 @@ class CycleSeg(BaseGAN):
 
         # GAN loss for generators['a']
         fake_pred = discriminators['a'](outputs['fake_night'])
-        losses['loss_gan_g_a'] = self.gan_loss(fake_pred,
+        losses['loss_gan_g_a'] = 0.01 * self.gan_loss(fake_pred,
                                                target_is_real=True,
                                                is_disc=False)
         # GAN loss for generators['b']
         fake_pred = discriminators['b'](outputs['fake_day'])
-        losses['loss_gan_g_b'] = self.gan_loss(fake_pred,
+        losses['loss_gan_g_b'] = 0.01 * self.gan_loss(fake_pred,
                                                target_is_real=True,
                                                is_disc=False)
         # Backward cycle loss
@@ -421,8 +421,8 @@ class CycleSeg(BaseGAN):
         losses['loss_seg_n'] = self.ce_loss(outputs['seg_pred_night'], label_n)
 
         # Perceptual loss
-        losses['loss_percep_a'], _ = self.perceptual_loss(outputs['rec_a'], outputs['real_a'])
-        losses['loss_percep_b'], _ = self.perceptual_loss(outputs['rec_b'], outputs['real_b'])
+        losses['loss_percep_a'], _ = self.perceptual_loss(outputs['rec_day'], outputs['real_day'])
+        losses['loss_percep_b'], _ = self.perceptual_loss(outputs['rec_night'], outputs['real_night'])
 
         loss_g, log_vars_g = self._parse_losses(losses)
         loss_g.backward()
