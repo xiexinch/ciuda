@@ -92,15 +92,20 @@ model = dict(
                   loss_weight=1.0),
     cycle_loss=dict(type='L1Loss', loss_weight=10.0, reduction='mean'),
     id_loss=dict(type='L1Loss', loss_weight=0.5, reduction='mean'),
-    # pretrained_seg_d=
-    # 'checkpoints/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth',
-    # pretrained_seg_n=
-    # 'checkpoints/pspnet_r101-d8_512x1024_80k_cityscapes_20200606_112211-e1e1100f.pth',
-    # pretrained_generator='checkpoints/iter_250000.pth',
-    pretrained='checkpoints/iter_250000.pth',
-    pretrained_seg_d=None,
-    pretrained_seg_n=None,
-)
+    perceptual_loss=dict(
+       type='PerceptualLoss',
+       layer_weights={'34': 1.0},
+       vgg_type='vgg19',
+       perceptual_weight=1.0,
+       style_weight=0,
+       norm_img=False),
+    pretrained_seg_d=
+    'checkpoints/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth',
+    pretrained_seg_n=
+    'checkpoints/pspnet_r101-d8_512x1024_80k_cityscapes_20200606_112211-e1e1100f.pth',
+    # pretrained_seg_d=None,
+    # pretrained_seg_n=None,
+    )
 train_cfg = dict(direction='a2b', buffer_size=10)
 test_cfg = dict(direction='a2b', show_input=True)
 
