@@ -16,9 +16,12 @@ from mmcv.utils import DictAction
 from mmseg.apis import multi_gpu_test, single_gpu_test
 from mmseg.datasets import build_dataloader, build_dataset
 from mmseg.models import build_segmentor
+from zmq import device
 
 from model.backbone import RepVGG  # noqa
 from model.seg_head import RefineNet  # noqa
+from model.gans import *  # noqa
+from mmgen.models.builder import build_model
 
 
 def parse_args():
@@ -135,7 +138,7 @@ def main():
 
     # build the model and load checkpoint
     cfg.model.train_cfg = None
-    model = build_segmentor(cfg.model, test_cfg=cfg.get('test_cfg'))
+    model = build_model(cfg.model, test_cfg=cfg.get('test_cfg'))
     fp16_cfg = cfg.get('fp16', None)
     if fp16_cfg is not None:
         wrap_fp16_model(model)
@@ -180,7 +183,8 @@ def main():
         tmpdir = None
 
     if not distributed:
-        model = MMDataParallel(model, device_ids=[0])
+        # model = MMDataParallel(model, device_ids=[0])
+        model = MMDataParallel(model.segmentor_n, device_ids=[0])
         results = single_gpu_test(model,
                                   data_loader,
                                   args.show,

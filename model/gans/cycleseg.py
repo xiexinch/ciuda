@@ -2,6 +2,7 @@ import os.path as osp
 
 import mmcv
 import numpy as np
+import torch
 import torch.nn as nn
 from mmcv.parallel import MMDistributedDataParallel
 from mmcv.runner import load_checkpoint
@@ -145,12 +146,12 @@ class CycleSeg(BaseGAN):
         self.generators['b'].init_weights(pretrained=pretrained)
         self.discriminators['a'].init_weights(pretrained=pretrained)
         self.discriminators['b'].init_weights(pretrained=pretrained)
-
-        load_checkpoint(self.segmentor_d, self.pretrained_seg_d)
-        load_checkpoint(self.segmentor_n, self.pretrained_seg_n)
-
-        # Fix teacher net
-        set_requires_grad(self.segmentor_d, False)
+        if self.pretrained_seg_d is not None:
+            load_checkpoint(self.segmentor_d, self.pretrained_seg_d)
+            # Fix teacher net
+            set_requires_grad(self.segmentor_d, False)
+        if self.pretrained_seg_n is not None:
+            load_checkpoint(self.segmentor_n, self.pretrained_seg_n)
 
     def get_module(self, module):
         """Get `nn.ModuleDict` to fit the `MMDistributedDataParallel`
@@ -168,8 +169,6 @@ class CycleSeg(BaseGAN):
 
         return module
 
-
-
     def forward_train(self, img_day, img_night, meta):
         """Forward function for training.
 
@@ -182,18 +181,23 @@ class CycleSeg(BaseGAN):
             dict: Dict of forward results for training.
         """
 
-
         generators = self.get_module(self.generators)
+        segmentor_d = self.get_module(self.segmentor_d)
+        segmentor_n = self.get_module(self.segmentor_n)
 
         fake_night = generators['a'](img_day)
         rec_day = generators['b'](fake_night)
         fake_day = generators['b'](img_night)
         rec_night = generators['a'](fake_day)
 
-        seg_pred_day = self.segmentor_d.encode_decode(img_day)
-        seg_pred_day_f = self.segmentor_d.encode_decode(fake_day)
-        seg_pred_night = self.segmentor_n.encode_decode(img_night)
-        seg_pred_night_f = self.segmentor_n.encode_decode(fake_night)
+        seg_pred_day = segmentor_d.encode_decode(img_day.detach(),
+                                                 img_metas=dict())
+        seg_pred_day_f = segmentor_d.encode_decode(fake_day.detach(),
+                                                   img_metas=dict())
+        seg_pred_night = segmentor_n.encode_decode(img_night.detach(),
+                                                   img_metas=dict())
+        seg_pred_night_f = segmentor_n.encode_decode(fake_night.detach(),
+                                                     img_metas=dict())
 
         results = dict(real_day=img_day,
                        fake_night=fake_night,
@@ -204,8 +208,7 @@ class CycleSeg(BaseGAN):
                        seg_pred_day=seg_pred_day,
                        seg_pred_day_f=seg_pred_day_f,
                        seg_pred_night=seg_pred_night,
-                       seg_pred_night_f=seg_pred_night_f
-                       )
+                       seg_pred_night_f=seg_pred_night_f)
         return results
 
     def forward_test(self,
@@ -402,15 +405,20 @@ class CycleSeg(BaseGAN):
                                                target_is_real=True,
                                                is_disc=False)
         # Backward cycle loss
-        losses['loss_cycle_a'] = self.cycle_loss(outputs['rec_a'],
+        losses['loss_cycle_a'] = self.cycle_loss(outputs['rec_day'],
                                                  outputs['real_day'])
         # Backward cycle loss
-        losses['loss_cycle_b'] = self.cycle_loss(outputs['rec_b'],
+        losses['loss_cycle_b'] = self.cycle_loss(outputs['rec_night'],
                                                  outputs['real_night'])
 
         # # CE loss for segmentor_n
-        # losses['loss_seg_d'] = self.ce_loss(outputs['seg_pred_night_f'], outputs['seg_pred_day'])
-        # losses['loss_seg_n'] = self.ce_loss(outputs['seg_pred_night'], outputs['seg_pred_day_f'])
+
+        label_d = outputs['seg_pred_day'].argmax(dim=1)
+        label_n = outputs['seg_pred_day_f'].argmax(dim=1)
+
+        losses['loss_seg_d'] = self.ce_loss(outputs['seg_pred_night_f'],
+                                            label_d)
+        losses['loss_seg_n'] = self.ce_loss(outputs['seg_pred_night'], label_n)
 
         # Perceptual loss
         losses['loss_percep_a'], _ = self.perceptual_loss(outputs['rec_a'], outputs['real_a'])
@@ -420,17 +428,18 @@ class CycleSeg(BaseGAN):
         loss_g.backward()
 
         return log_vars_g
-    
+
     def backward_segmentor(self, outputs):
-        
+
         losses = dict()
-        losses['loss_seg_d'] = self.ce_loss(outputs['seg_pred_night_f'], outputs['seg_pred_day'])
-        losses['loss_seg_n'] = self.ce_loss(outputs['seg_pred_night'], outputs['seg_pred_day_f'])
+        losses['loss_seg_d'] = self.ce_loss(outputs['seg_pred_night_f'],
+                                            outputs['seg_pred_day'])
+        losses['loss_seg_n'] = self.ce_loss(outputs['seg_pred_night'],
+                                            outputs['seg_pred_day_f'])
         loss_seg, log_vars_seg = self._parse_losses(losses)
         loss_seg.backward()
 
         return log_vars_seg
-
 
     def train_step(self, data_batch, optimizer):
         """Training step function.
@@ -465,20 +474,19 @@ class CycleSeg(BaseGAN):
         if (self.step_counter % self.disc_steps == 0
                 and self.step_counter >= self.disc_init_steps):
             set_requires_grad(self.discriminators, False)
-            set_requires_grad(self.segmentor_n, False)
-            set_requires_grad(self.generators, True)
+            # set_requires_grad(self.segmentor_n, False)
+            # set_requires_grad(self.generators, True)
             # optimize generators
             optimizer['generators'].zero_grad()
             log_vars.update(self.backward_generators(outputs=outputs))
             optimizer['generators'].step()
 
             # optimize segmentor
-            set_requires_grad(self.generators, False)
-            set_requires_grad(self.segmentor_n, True)
-            optimizer['segmentor_n'].zero_grad()
-            log_vars.update(self.backward_segmentor(outputs=outputs))
-            optimizer['segmentor_n'].step()
-
+            # set_requires_grad(self.generators, False)
+            # set_requires_grad(self.segmentor_n, True)
+            # optimizer['segmentor_n'].zero_grad()
+            # log_vars.update(self.backward_segmentor(outputs=outputs))
+            # optimizer['segmentor_n'].step()
 
         self.step_counter += 1
 
@@ -508,5 +516,9 @@ class CycleSeg(BaseGAN):
         meta = data_batch['meta']
 
         # forward generator
-        results = self.forward(img_day, img_night, meta, test_mode=True, **kwargs)
+        results = self.forward(img_day,
+                               img_night,
+                               meta,
+                               test_mode=True,
+                               **kwargs)
         return results
