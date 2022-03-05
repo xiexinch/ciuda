@@ -111,6 +111,7 @@ test_pipeline = [
         meta_keys=[f'img_{domain_a}_path', f'img_{domain_b}_path'])
 ]
 data = dict(
+    samples_per_gpu=2,
     train=dict(
         dataroot=dataroot,
         pipeline=train_pipeline,
@@ -138,8 +139,8 @@ custom_hooks = [
     dict(
         type='MMGenVisualizationHook',
         output_dir='training_samples',
-        res_name_list=[f'fake_{domain_a}', f'fake_{domain_b}'],
-        interval=5000)
+        res_name_list=[f'real_{domain_a}', f'fake_{domain_b}', f'real_{domain_b}', f'fake_{domain_a}'],
+        interval=1000)
 ]
 
 runner = None
@@ -158,15 +159,15 @@ metrics = dict(
         image_shape=(3, 256, 256),
         inception_args=dict(type='pytorch')))
 
-evaluation = dict(
-    type='TranslationEvalHook',
-    target_domain=domain_b,
-    interval=10000,
-    metrics=[
-        dict(type='FID', num_images=num_images, bgr2rgb=True),
-        dict(
-            type='IS',
-            num_images=num_images,
-            inception_args=dict(type='pytorch'))
-    ],
-    best_metric=['fid', 'is'])
+# evaluation = dict(
+#     type='TranslationEvalHook',
+#     target_domain=domain_b,
+#     interval=10000,
+#     metrics=[
+#         dict(type='FID', num_images=num_images, bgr2rgb=True),
+#         dict(
+#             type='IS',
+#             num_images=num_images,
+#             inception_args=dict(type='pytorch'))
+#     ],
+#     best_metric=['fid', 'is'])

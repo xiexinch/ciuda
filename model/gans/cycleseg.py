@@ -50,7 +50,6 @@ class CycleSeg(BaseGAN):
             `direction` during testing: a2b | b2a.
         pretrained (str): Path for pretrained model. Default: None.
     """
-
     def __init__(self,
                  generator,
                  discriminator,
@@ -78,13 +77,13 @@ class CycleSeg(BaseGAN):
 
         # generators
         self.generators = nn.ModuleDict()
-        self.generators['a'] = build_module(generator)
-        self.generators['b'] = build_module(generator)
+        self.generators['day'] = build_module(generator)
+        self.generators['night'] = build_module(generator)
 
         # discriminators
         self.discriminators = nn.ModuleDict()
-        self.discriminators['a'] = build_module(discriminator)
-        self.discriminators['b'] = build_module(discriminator)
+        self.discriminators['day'] = build_module(discriminator)
+        self.discriminators['night'] = build_module(discriminator)
 
         # segmentors
         self.segmentor_d = build_segmentor(segmentor_d)
@@ -140,10 +139,13 @@ class CycleSeg(BaseGAN):
             pretrained (str, optional): Path for pretrained weights. If given
                 None, pretrained weights will not be loaded. Default: None.
         """
-        self.generators['a'].init_weights(pretrained=pretrained)
-        self.generators['b'].init_weights(pretrained=pretrained)
-        self.discriminators['a'].init_weights(pretrained=pretrained)
-        self.discriminators['b'].init_weights(pretrained=pretrained)
+        if pretrained is not None:
+            load_checkpoint(self, pretrained)
+        else:
+            self.generators['day'].init_weights(pretrained=pretrained)
+            self.generators['night'].init_weights(pretrained=pretrained)
+            self.discriminators['day'].init_weights(pretrained=pretrained)
+            self.discriminators['night'].init_weights(pretrained=pretrained)
 
         load_checkpoint(self.segmentor_d, self.pretrained_seg_d)
         load_checkpoint(self.segmentor_n, self.pretrained_seg_n)
@@ -167,8 +169,6 @@ class CycleSeg(BaseGAN):
 
         return module
 
-
-
     def forward_train(self, img_day, img_night, meta):
         """Forward function for training.
 
@@ -181,20 +181,23 @@ class CycleSeg(BaseGAN):
             dict: Dict of forward results for training.
         """
 
-
         generators = self.get_module(self.generators)
         segmentor_d = self.get_module(self.segmentor_d)
         segmentor_n = self.get_module(self.segmentor_n)
 
-        fake_night = generators['a'](img_day)
-        rec_day = generators['b'](fake_night)
-        fake_day = generators['b'](img_night)
-        rec_night = generators['a'](fake_day)
+        fake_night = generators['day'](img_day)
+        rec_day = generators['night'](fake_night)
+        fake_day = generators['night'](img_night)
+        rec_night = generators['day'](fake_day)
 
-        seg_pred_day = segmentor_d.encode_decode(img_day.detach(), img_metas=dict())
-        seg_pred_day_f = segmentor_d.encode_decode(fake_day.detach(), img_metas=dict())
-        seg_pred_night = segmentor_n.encode_decode(img_night.detach(), img_metas=dict())
-        seg_pred_night_f = segmentor_n.encode_decode(fake_night.detach(), img_metas=dict())
+        seg_pred_day = segmentor_d.encode_decode(img_day.detach(),
+                                                 img_metas=dict())
+        seg_pred_day_f = segmentor_d.encode_decode(fake_day.detach(),
+                                                   img_metas=dict())
+        seg_pred_night = segmentor_n.encode_decode(img_night.detach(),
+                                                   img_metas=dict())
+        seg_pred_night_f = segmentor_n.encode_decode(fake_night.detach(),
+                                                     img_metas=dict())
 
         results = dict(real_day=img_day,
                        fake_night=fake_night,
@@ -205,8 +208,7 @@ class CycleSeg(BaseGAN):
                        seg_pred_day=seg_pred_day,
                        seg_pred_day_f=seg_pred_day_f,
                        seg_pred_night=seg_pred_night,
-                       seg_pred_night_f=seg_pred_night_f
-                       )
+                       seg_pred_night_f=seg_pred_night_f)
         return results
 
     def forward_test(self,
@@ -242,8 +244,8 @@ class CycleSeg(BaseGAN):
 
         generators = self.get_module(self.generators)
 
-        fake_night = generators['a'](img_day)
-        fake_day = generators['b'](img_night)
+        fake_night = generators['day'](img_day)
+        fake_day = generators['night'](img_night)
         results = dict(real_day=real_day.cpu(),
                        fake_night=fake_night.cpu(),
                        real_night=real_night.cpu(),
@@ -302,8 +304,8 @@ class CycleSeg(BaseGAN):
             Tensor: Dummy output produced by forwarding the dummy input.
         """
         generators = self.get_module(self.generators)
-        tmp = generators['a'](img)
-        out = generators['b'](tmp)
+        tmp = generators['day'](img)
+        out = generators['night'](tmp)
         return out
 
     def forward(self, img_day, img_night, meta, test_mode=False, **kwargs):
@@ -335,13 +337,13 @@ class CycleSeg(BaseGAN):
         log_vars_d = dict()
 
         losses = dict()
-        # GAN loss for discriminators['a']
+        # GAN loss for discriminators['day']
         fake_night = self.image_buffers['b'].query(outputs['fake_night'])
-        fake_pred = discriminators['a'](fake_night.detach())
+        fake_pred = discriminators['day'](fake_night.detach())
         losses['loss_gan_d_a_fake'] = self.gan_loss(fake_pred,
                                                     target_is_real=False,
                                                     is_disc=True)
-        real_pred = discriminators['a'](outputs['real_night'])
+        real_pred = discriminators['day'](outputs['real_night'])
         losses['loss_gan_d_a_real'] = self.gan_loss(real_pred,
                                                     target_is_real=True,
                                                     is_disc=True)
@@ -352,13 +354,13 @@ class CycleSeg(BaseGAN):
         log_vars_d['loss_gan_d_a'] = log_vars_d_a['loss'] * 0.5
 
         losses = dict()
-        # GAN loss for discriminators['b']
+        # GAN loss for discriminators['night']
         fake_day = self.image_buffers['a'].query(outputs['fake_day'])
-        fake_pred = discriminators['b'](fake_day.detach())
+        fake_pred = discriminators['night'](fake_day.detach())
         losses['loss_gan_d_b_fake'] = self.gan_loss(fake_pred,
                                                     target_is_real=False,
                                                     is_disc=True)
-        real_pred = discriminators['b'](outputs['real_day'])
+        real_pred = discriminators['night'](outputs['real_day'])
         losses['loss_gan_d_b_real'] = self.gan_loss(real_pred,
                                                     target_is_real=True,
                                                     is_disc=True)
@@ -385,20 +387,20 @@ class CycleSeg(BaseGAN):
         losses = dict()
         # Identity losses for generators
         if self.id_loss is not None and self.id_loss.loss_weight > 0:
-            id_a = generators['a'](outputs['real_night'])
+            id_a = generators['day'](outputs['real_night'])
             losses['loss_id_a'] = self.id_loss(
                 id_a, outputs['real_night']) * self.cycle_loss.loss_weight
-            id_b = generators['b'](outputs['real_day'])
+            id_b = generators['night'](outputs['real_day'])
             losses['loss_id_b'] = self.id_loss(
                 id_b, outputs['real_day']) * self.cycle_loss.loss_weight
 
-        # GAN loss for generators['a']
-        fake_pred = discriminators['a'](outputs['fake_night'])
+        # GAN loss for generators['day']
+        fake_pred = discriminators['day'](outputs['fake_night'])
         losses['loss_gan_g_a'] = self.gan_loss(fake_pred,
                                                target_is_real=True,
                                                is_disc=False)
-        # GAN loss for generators['b']
-        fake_pred = discriminators['b'](outputs['fake_day'])
+        # GAN loss for generators['night']
+        fake_pred = discriminators['night'](outputs['fake_day'])
         losses['loss_gan_g_b'] = self.gan_loss(fake_pred,
                                                target_is_real=True,
                                                is_disc=False)
@@ -414,24 +416,26 @@ class CycleSeg(BaseGAN):
         label_d = outputs['seg_pred_day'].argmax(dim=1)
         label_n = outputs['seg_pred_day_f'].argmax(dim=1)
 
-        losses['loss_seg_d'] = self.ce_loss(outputs['seg_pred_night_f'], label_d)
+        losses['loss_seg_d'] = self.ce_loss(outputs['seg_pred_night_f'],
+                                            label_d)
         losses['loss_seg_n'] = self.ce_loss(outputs['seg_pred_night'], label_n)
 
         loss_g, log_vars_g = self._parse_losses(losses)
         loss_g.backward()
 
         return log_vars_g
-    
+
     def backward_segmentor(self, outputs):
-        
+
         losses = dict()
-        losses['loss_seg_d'] = self.ce_loss(outputs['seg_pred_night_f'], outputs['seg_pred_day'])
-        losses['loss_seg_n'] = self.ce_loss(outputs['seg_pred_night'], outputs['seg_pred_day_f'])
+        losses['loss_seg_d'] = self.ce_loss(outputs['seg_pred_night_f'],
+                                            outputs['seg_pred_day'])
+        losses['loss_seg_n'] = self.ce_loss(outputs['seg_pred_night'],
+                                            outputs['seg_pred_day_f'])
         loss_seg, log_vars_seg = self._parse_losses(losses)
         loss_seg.backward()
 
         return log_vars_seg
-
 
     def train_step(self, data_batch, optimizer):
         """Training step function.
@@ -480,7 +484,6 @@ class CycleSeg(BaseGAN):
             # log_vars.update(self.backward_segmentor(outputs=outputs))
             # optimizer['segmentor_n'].step()
 
-
         self.step_counter += 1
 
         log_vars.pop('loss', None)  # remove the unnecessary 'loss'
@@ -509,5 +512,9 @@ class CycleSeg(BaseGAN):
         meta = data_batch['meta']
 
         # forward generator
-        results = self.forward(img_day, img_night, meta, test_mode=True, **kwargs)
+        results = self.forward(img_day,
+                               img_night,
+                               meta,
+                               test_mode=True,
+                               **kwargs)
         return results
