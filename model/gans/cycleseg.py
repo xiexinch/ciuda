@@ -59,6 +59,7 @@ class CycleSeg(BaseGAN):
                  cycle_loss,
                  ce_loss,
                  id_loss=None,
+                 perceptual_loss=None,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
@@ -103,6 +104,7 @@ class CycleSeg(BaseGAN):
         self.cycle_loss = build_module(cycle_loss)
         self.id_loss = build_module(id_loss) if id_loss else None
         self.ce_loss = build_seg_loss(ce_loss)
+        self.perceptual_loss = build_module(perceptual_loss)
 
         # others
         self.disc_steps = 1 if self.train_cfg is None else self.train_cfg.get(
@@ -409,6 +411,10 @@ class CycleSeg(BaseGAN):
         # # CE loss for segmentor_n
         # losses['loss_seg_d'] = self.ce_loss(outputs['seg_pred_night_f'], outputs['seg_pred_day'])
         # losses['loss_seg_n'] = self.ce_loss(outputs['seg_pred_night'], outputs['seg_pred_day_f'])
+
+        # Perceptual loss
+        losses['loss_percep_a'], _ = self.perceptual_loss(outputs['rec_a'], outputs['real_a'])
+        losses['loss_percep_b'], _ = self.perceptual_loss(outputs['rec_b'], outputs['real_b'])
 
         loss_g, log_vars_g = self._parse_losses(losses)
         loss_g.backward()
