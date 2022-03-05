@@ -17,6 +17,7 @@ from mmgen.utils import get_root_logger
 from model.gans import RoundGAN  # noqa
 from dataset import RoundImageDataset  # noqa
 
+from mmseg.ops import resize
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Evaluate a GAN model')
@@ -142,18 +143,29 @@ def main():
     # data = scatter(collate([data], samples_per_gpu=1), [device])[0]
     progress_bar = mmcv.ProgressBar(len(test_dataset))
     for idx, data in enumerate(test_dataloader):
-        name = str(data['meta'].data[0][0]['img_a_path']).replace(
-            './data/city2darkzurich/testA/', '')
+        # print(data['meta'])
+        name = str(data['meta'].data[0][0]['img_night_path']).replace(
+            './data/city2darkzurich/testB/', '')
+        # print(name)
+        
         dirname = os.path.dirname(name)
+        # print(dirname)
+        
         name = name.replace(dirname, '')
-        dirname = dirname.replace('\\', '/')
+        # dirname = dirname.replace('\\', '/')
+        
         with torch.no_grad():
-            results = model(test_mode=True, **data)
-        save_dir = os.path.dirname(args.save_path) + '/' + dirname
-
+            results = model(img=data['img_night'], test_mode=True, target_domain='day')
+        # save_dir = os.path.dirname(args.save_path) + '/' + dirname
+        save_dir = os.path.dirname(args.save_path)
+        # print(save_dir + '/' + name)
+        # raise '123'
         mmcv.mkdir_or_exist(save_dir)
-        utils.save_image((results['fake_c'][:, [2, 1, 0]] + 1.) / 2.,
-                         save_dir + '/' + name)
+        img = (results['target'][:, [2, 1, 0]] + 1.) / 2.
+        # img = resize(img, scale_factor=2, align_corners=False, mode='bicubic')
+        # print(save_dir + '/' + dirname+'/' + dirname+name[1:])
+        # raise '123'
+        utils.save_image(img, save_dir + '/' + dirname+'/' + dirname+name[1:])
         progress_bar.update()
 
 

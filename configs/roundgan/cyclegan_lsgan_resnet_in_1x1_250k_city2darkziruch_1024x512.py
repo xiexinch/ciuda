@@ -55,15 +55,15 @@ train_pipeline = [
         io_backend='disk',
         key=f'img_{domain_b}',
         flag='color'),
-    dict(
-        type='Resize',
-        keys=[f'img_{domain_a}', f'img_{domain_b}'],
-        scale=(286, 286),
-        interpolation='bicubic'),
+    # dict(
+    #     type='Resize',
+    #     keys=[f'img_{domain_a}', f'img_{domain_b}'],
+    #     scale=(286, 286),
+    #     interpolation='bicubic'),
     dict(
         type='Crop',
         keys=[f'img_{domain_a}', f'img_{domain_b}'],
-        crop_size=(256, 256),
+        crop_size=(960, 540),
         random_crop=True),
     dict(type='Flip', keys=[f'img_{domain_a}'], direction='horizontal'),
     dict(type='Flip', keys=[f'img_{domain_b}'], direction='horizontal'),
@@ -92,11 +92,11 @@ test_pipeline = [
         io_backend='disk',
         key=f'img_{domain_b}',
         flag='color'),
-    dict(
-        type='Resize',
-        keys=[f'img_{domain_a}', f'img_{domain_b}'],
-        scale=(256, 256),
-        interpolation='bicubic'),
+    # dict(
+    #     type='Resize',
+    #     keys=[f'img_{domain_a}', f'img_{domain_b}'],
+    #     scale=(256, 256),
+    #     interpolation='bicubic'),
     dict(type='RescaleToZeroOne', keys=[f'img_{domain_a}', f'img_{domain_b}']),
     dict(
         type='Normalize',
@@ -111,6 +111,7 @@ test_pipeline = [
         meta_keys=[f'img_{domain_a}_path', f'img_{domain_b}_path'])
 ]
 data = dict(
+    samples_per_gpu=1,
     train=dict(
         dataroot=dataroot,
         pipeline=train_pipeline,
@@ -138,35 +139,35 @@ custom_hooks = [
     dict(
         type='MMGenVisualizationHook',
         output_dir='training_samples',
-        res_name_list=[f'fake_{domain_a}', f'fake_{domain_b}'],
-        interval=5000)
+        res_name_list=[f'real_{domain_a}', f'fake_{domain_b}', f'real_{domain_b}', f'fake_{domain_a}', ],
+        interval=1000)
 ]
 
 runner = None
 use_ddp_wrapper = True
 total_iters = 250000
 workflow = [('train', 1)]
-exp_name = 'cyclegan_city2darkzurich'
+exp_name = 'cyclegan_city2darkzurich_keepsize'
 work_dir = f'./work_dirs/experiments/{exp_name}'
 num_images = 500
 # testA: 309, testB:238
-metrics = dict(
-    FID=dict(type='FID', num_images=num_images, image_shape=(3, 256, 256)),
-    IS=dict(
-        type='IS',
-        num_images=num_images,
-        image_shape=(3, 256, 256),
-        inception_args=dict(type='pytorch')))
+# metrics = dict(
+#     FID=dict(type='FID', num_images=num_images, image_shape=(3, 256, 256)),
+#     IS=dict(
+#         type='IS',
+#         num_images=num_images,
+#         image_shape=(3, 256, 256),
+#         inception_args=dict(type='pytorch')))
 
-evaluation = dict(
-    type='TranslationEvalHook',
-    target_domain=domain_b,
-    interval=10000,
-    metrics=[
-        dict(type='FID', num_images=num_images, bgr2rgb=True),
-        dict(
-            type='IS',
-            num_images=num_images,
-            inception_args=dict(type='pytorch'))
-    ],
-    best_metric=['fid', 'is'])
+# evaluation = dict(
+#     type='TranslationEvalHook',
+#     target_domain=domain_b,
+#     interval=10000,
+#     metrics=[
+#         dict(type='FID', num_images=num_images, bgr2rgb=True),
+#         dict(
+#             type='IS',
+#             num_images=num_images,
+#             inception_args=dict(type='pytorch'))
+#     ],
+#     best_metric=['fid', 'is'])
