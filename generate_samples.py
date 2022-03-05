@@ -16,6 +16,7 @@ from mmgen.utils import get_root_logger
 
 from model.gans import RoundGAN  # noqa
 from dataset import RoundImageDataset  # noqa
+from mmseg.ops import resize
 
 from mmseg.ops import resize
 
@@ -124,7 +125,7 @@ def main():
     model.eval()
 
     _ = load_checkpoint(model, args.checkpoint, map_location='cpu')
-    model = MMDataParallel(model, device_ids=[0])
+    model = MMDataParallel(model.cuda(), device_ids=[0])
 
     test_dataset = build_dataset(cfg.data.test)
     test_dataloader = build_dataloader(test_dataset,
@@ -167,7 +168,6 @@ def main():
         # raise '123'
         utils.save_image(img, save_dir + '/' + dirname+'/' + dirname+name[1:])
         progress_bar.update()
-
 
 
 if __name__ == '__main__':

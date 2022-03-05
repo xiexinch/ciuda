@@ -6,42 +6,37 @@ _base_ = [
 
 domain_a = 'day'
 domain_b = 'night'
-model = dict(
-    default_domain=domain_b,
-    reachable_domains=[domain_a, domain_b],
-    related_domains=[domain_a, domain_b],
-    gen_auxiliary_loss=[
-        dict(
-            type='L1Loss',
-            loss_weight=10.0,
-            loss_name='cycle_loss',
-            data_info=dict(
-                pred=f'cycle_{domain_a}', target=f'real_{domain_a}'),
-            reduction='mean'),
-        dict(
-            type='L1Loss',
-            loss_weight=10.0,
-            loss_name='cycle_loss',
-            data_info=dict(
-                pred=f'cycle_{domain_b}',
-                target=f'real_{domain_b}',
-            ),
-            reduction='mean'),
-        dict(
-            type='L1Loss',
-            loss_weight=0.5,
-            loss_name='id_loss',
-            data_info=dict(
-                pred=f'identity_{domain_a}', target=f'real_{domain_a}'),
-            reduction='mean'),
-        dict(
-            type='L1Loss',
-            loss_weight=0.5,
-            loss_name='id_loss',
-            data_info=dict(
-                pred=f'identity_{domain_b}', target=f'real_{domain_b}'),
-            reduction='mean')
-    ])
+model = dict(default_domain=domain_b,
+             reachable_domains=[domain_a, domain_b],
+             related_domains=[domain_a, domain_b],
+             gen_auxiliary_loss=[
+                 dict(type='L1Loss',
+                      loss_weight=10.0,
+                      loss_name='cycle_loss',
+                      data_info=dict(pred=f'cycle_{domain_a}',
+                                     target=f'real_{domain_a}'),
+                      reduction='mean'),
+                 dict(type='L1Loss',
+                      loss_weight=10.0,
+                      loss_name='cycle_loss',
+                      data_info=dict(
+                          pred=f'cycle_{domain_b}',
+                          target=f'real_{domain_b}',
+                      ),
+                      reduction='mean'),
+                 dict(type='L1Loss',
+                      loss_weight=0.5,
+                      loss_name='id_loss',
+                      data_info=dict(pred=f'identity_{domain_a}',
+                                     target=f'real_{domain_a}'),
+                      reduction='mean'),
+                 dict(type='L1Loss',
+                      loss_weight=0.5,
+                      loss_name='id_loss',
+                      data_info=dict(pred=f'identity_{domain_b}',
+                                     target=f'real_{domain_b}'),
+                      reduction='mean')
+             ])
 
 dataroot = './data/city2darkzurich'
 train_pipeline = [
@@ -68,17 +63,15 @@ train_pipeline = [
     dict(type='Flip', keys=[f'img_{domain_a}'], direction='horizontal'),
     dict(type='Flip', keys=[f'img_{domain_b}'], direction='horizontal'),
     dict(type='RescaleToZeroOne', keys=[f'img_{domain_a}', f'img_{domain_b}']),
-    dict(
-        type='Normalize',
-        keys=[f'img_{domain_a}', f'img_{domain_b}'],
-        to_rgb=False,
-        mean=[0.5, 0.5, 0.5],
-        std=[0.5, 0.5, 0.5]),
+    dict(type='Normalize',
+         keys=[f'img_{domain_a}', f'img_{domain_b}'],
+         to_rgb=False,
+         mean=[0.5, 0.5, 0.5],
+         std=[0.5, 0.5, 0.5]),
     dict(type='ImageToTensor', keys=[f'img_{domain_a}', f'img_{domain_b}']),
-    dict(
-        type='Collect',
-        keys=[f'img_{domain_a}', f'img_{domain_b}'],
-        meta_keys=[f'img_{domain_a}_path', f'img_{domain_b}_path'])
+    dict(type='Collect',
+         keys=[f'img_{domain_a}', f'img_{domain_b}'],
+         meta_keys=[f'img_{domain_a}_path', f'img_{domain_b}_path'])
 ]
 
 test_pipeline = [
@@ -98,17 +91,15 @@ test_pipeline = [
     #     scale=(256, 256),
     #     interpolation='bicubic'),
     dict(type='RescaleToZeroOne', keys=[f'img_{domain_a}', f'img_{domain_b}']),
-    dict(
-        type='Normalize',
-        keys=[f'img_{domain_a}', f'img_{domain_b}'],
-        to_rgb=False,
-        mean=[0.5, 0.5, 0.5],
-        std=[0.5, 0.5, 0.5]),
+    dict(type='Normalize',
+         keys=[f'img_{domain_a}', f'img_{domain_b}'],
+         to_rgb=False,
+         mean=[0.5, 0.5, 0.5],
+         std=[0.5, 0.5, 0.5]),
     dict(type='ImageToTensor', keys=[f'img_{domain_a}', f'img_{domain_b}']),
-    dict(
-        type='Collect',
-        keys=[f'img_{domain_a}', f'img_{domain_b}'],
-        meta_keys=[f'img_{domain_a}_path', f'img_{domain_b}_path'])
+    dict(type='Collect',
+         keys=[f'img_{domain_a}', f'img_{domain_b}'],
+         meta_keys=[f'img_{domain_a}_path', f'img_{domain_b}_path'])
 ]
 data = dict(
     samples_per_gpu=1,
@@ -128,12 +119,16 @@ data = dict(
         domain_b=domain_b,
         pipeline=test_pipeline))
 
-optimizer = dict(
-    generators=dict(type='Adam', lr=0.0002, betas=(0.5, 0.999)),
-    discriminators=dict(type='Adam', lr=0.0002, betas=(0.5, 0.999)))
+optimizer = dict(generators=dict(type='Adam', lr=0.0002, betas=(0.5, 0.999)),
+                 discriminators=dict(type='Adam',
+                                     lr=0.0002,
+                                     betas=(0.5, 0.999)))
 # learning policy
-lr_config = dict(
-    policy='Linear', by_epoch=False, target_lr=0, start=125000, interval=1250)
+lr_config = dict(policy='Linear',
+                 by_epoch=False,
+                 target_lr=0,
+                 start=125000,
+                 interval=1250)
 checkpoint_config = dict(interval=10000, save_optimizer=True, by_epoch=False)
 custom_hooks = [
     dict(
