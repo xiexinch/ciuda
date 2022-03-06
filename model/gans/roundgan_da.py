@@ -447,13 +447,13 @@ class RoundGAN(BaseGAN):
                                                is_disc=False)
         # Forward cycle loss
         losses['loss_cycle_a'] = self.cycle_loss(outputs['rec_a'],
-                                                 outputs['real_a'])
+                                                 outputs['real_a']) * self.cycle_loss.loss_weight
         # Backward cycle loss
         losses['loss_cycle_b'] = self.cycle_loss(outputs['rec_b'],
-                                                 outputs['real_b'])
+                                                 outputs['real_b']) * self.cycle_loss.loss_weight
         # Backward cycle loss
         losses['loss_cycle_c'] = self.cycle_loss(outputs['rec_c'],
-                                                 outputs['real_c'])
+                                                 outputs['real_c']) * self.cycle_loss.loss_weight
 
         loss_g, log_vars_g = self._parse_losses(losses)
         loss_g.backward()
