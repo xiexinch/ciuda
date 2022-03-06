@@ -99,6 +99,7 @@ model = dict(
        perceptual_weight=1.0,
        style_weight=0,
        norm_img=False),
+    pretrained='checkpoints/cycle_iter_50000.pth',
     pretrained_seg_d=
     'checkpoints/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth',
     pretrained_seg_n=
@@ -122,13 +123,13 @@ train_pipeline = [
          io_backend='disk',
          key=f'img_{domain_b}',
          flag='color'),
-    dict(type='Resize',
-         keys=[f'img_{domain_a}', f'img_{domain_b}'],
-         scale=(1920, 1080),
-         interpolation='bicubic'),
+    # dict(type='Resize',
+    #      keys=[f'img_{domain_a}', f'img_{domain_b}'],
+    #      scale=(1920, 1080),
+    #      interpolation='bicubic'),
     dict(type='Crop',
          keys=[f'img_{domain_a}', f'img_{domain_b}'],
-         crop_size=(256, 512),
+         crop_size=(540, 540),
          random_crop=True),
     dict(type='Flip', keys=[f'img_{domain_a}'], direction='horizontal'),
     dict(type='Flip', keys=[f'img_{domain_b}'], direction='horizontal'),
@@ -137,7 +138,11 @@ train_pipeline = [
          keys=[f'img_{domain_a}', f'img_{domain_b}'],
          to_rgb=False,
          mean=[0.5, 0.5, 0.5],
-         std=[0.5, 0.5, 0.5]),
+         std=[0.5, 0.5, 0.5]
+         # mean=[123.675, 116.28, 103.53],
+         # std=[58.395, 57.12, 57.375],
+         # to_rgb=False
+),
     dict(type='ImageToTensor', keys=[f'img_{domain_a}', f'img_{domain_b}']),
     dict(type='Collect',
          keys=[f'img_{domain_a}', f'img_{domain_b}'],
@@ -232,5 +237,5 @@ runner = None
 use_ddp_wrapper = True
 total_iters = 250000
 workflow = [('train', 1)]
-exp_name = 'cycleseg_city2darkzurich'
+exp_name = 'cycleseg_city2darkzurich_nopercept_incyclepre'
 work_dir = f'./work_dirs/experiments/{exp_name}'
