@@ -398,10 +398,10 @@ class RoundGAN(BaseGAN):
                                                     target_is_real=True,
                                                     is_disc=True)
 
-        loss_d_b, log_vars_d_b = self._parse_losses(losses)
-        loss_d_b *= 0.5
-        loss_d_b.backward()
-        log_vars_d['loss_gan_d_c'] = log_vars_d_b['loss'] * 0.5
+        loss_d_c, log_vars_d_c = self._parse_losses(losses)
+        loss_d_c *= 0.5
+        loss_d_c.backward()
+        log_vars_d['loss_gan_d_c'] = log_vars_d_c['loss'] * 0.5
 
         return log_vars_d
 
@@ -420,15 +420,15 @@ class RoundGAN(BaseGAN):
         losses = dict()
         # Identity losses for generators
         if self.id_loss is not None and self.id_loss.loss_weight > 0:
-            id_a = generators['a'](outputs['real_b'])
+            id_a = generators['a'](outputs['real_a'])
             losses['loss_id_a'] = self.id_loss(
-                id_a, outputs['real_b']) * self.cycle_loss.loss_weight
-            id_b = generators['b'](outputs['real_c'])
+                id_a, outputs['real_b']) * self.id_loss.loss_weight
+            id_b = generators['b'](outputs['real_b'])
             losses['loss_id_b'] = self.id_loss(
-                id_b, outputs['real_c']) * self.cycle_loss.loss_weight
-            id_c = generators['c'](outputs['real_a'])
-            losses['loss_id_b'] = self.id_loss(
-                id_c, outputs['real_a']) * self.cycle_loss.loss_weight
+                id_b, outputs['real_c']) * self.id_loss.loss_weight
+            id_c = generators['c'](outputs['real_c'])
+            losses['loss_id_c'] = self.id_loss(
+                id_c, outputs['real_a']) * self.id_loss.loss_weight
 
         # GAN loss for generators['a']
         fake_pred = discriminators['a'](outputs['fake_b'])
@@ -442,7 +442,7 @@ class RoundGAN(BaseGAN):
                                                is_disc=False)
         # GAN loss for generators['c']
         fake_pred = discriminators['c'](outputs['fake_a'])
-        losses['loss_gan_g_b'] = self.gan_loss(fake_pred,
+        losses['loss_gan_g_c'] = self.gan_loss(fake_pred,
                                                target_is_real=True,
                                                is_disc=False)
         # Forward cycle loss
