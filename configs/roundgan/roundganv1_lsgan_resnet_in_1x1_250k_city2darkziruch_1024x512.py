@@ -25,7 +25,7 @@ custom_hooks = [
 
 runner = None
 use_ddp_wrapper = True
-total_iters = 250000
+total_iters = 120000
 workflow = [('train', 1)]
 exp_name = 'roundgan_city2darkzurich'
 work_dir = f'./work_dirs/experiments/{exp_name}'
