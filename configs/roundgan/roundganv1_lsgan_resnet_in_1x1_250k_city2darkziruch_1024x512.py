@@ -13,18 +13,19 @@ optimizer = dict(generators=dict(type='Adam', lr=0.0002, betas=(0.5, 0.999)),
                  discriminators=dict(type='Adam',
                                      lr=0.0002,
                                      betas=(0.5, 0.999)))
-lr_config = None
+lr_config = dict(
+    policy='Linear', by_epoch=False, target_lr=0, start=125000, interval=1250)
 checkpoint_config = dict(interval=10000, save_optimizer=True, by_epoch=False)
 custom_hooks = [
     dict(type='MMGenVisualizationHook',
          output_dir='training_samples',
-         res_name_list=['fake_c'],
-         interval=5000)
+         res_name_list=['real_a', 'fake_b', 'real_b', 'fake_c', 'real_c', 'fake_a'],
+         interval=1000)
 ]
 
 runner = None
 use_ddp_wrapper = True
-total_iters = 250000
+total_iters = 120000
 workflow = [('train', 1)]
 exp_name = 'roundgan_city2darkzurich'
 work_dir = f'./work_dirs/experiments/{exp_name}'

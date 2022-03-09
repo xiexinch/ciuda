@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from mmcv.parallel import MMDistributedDataParallel
-from mmcv.runner import load_checkpoint
+from mmcv.runner import load_checkpoint, _load_checkpoint, load_state_dict
 
 from mmgen.models.builder import MODELS, build_module
 from mmgen.models.misc import tensor2img
@@ -59,9 +59,11 @@ class CycleSeg(BaseGAN):
                  cycle_loss,
                  ce_loss,
                  id_loss=None,
+                 perceptual_loss=None,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
+                 pretrained_generator=None,
                  pretrained_seg_d=None,
                  pretrained_seg_n=None):
         super().__init__()
@@ -103,6 +105,7 @@ class CycleSeg(BaseGAN):
         self.cycle_loss = build_module(cycle_loss)
         self.id_loss = build_module(id_loss) if id_loss else None
         self.ce_loss = build_seg_loss(ce_loss)
+        self.perceptual_loss = build_module(perceptual_loss)
 
         # others
         self.disc_steps = 1 if self.train_cfg is None else self.train_cfg.get(
@@ -139,19 +142,19 @@ class CycleSeg(BaseGAN):
             pretrained (str, optional): Path for pretrained weights. If given
                 None, pretrained weights will not be loaded. Default: None.
         """
+        # self.generators['day'].init_weights(pretrained=pretrained)
+        # self.generators['night'].init_weights(pretrained=pretrained)
+        # self.discriminators['day'].init_weights(pretrained=pretrained)
+        # self.discriminators['night'].init_weights(pretrained=pretrained)
         if pretrained is not None:
             load_checkpoint(self, pretrained)
-        else:
-            self.generators['day'].init_weights(pretrained=pretrained)
-            self.generators['night'].init_weights(pretrained=pretrained)
-            self.discriminators['day'].init_weights(pretrained=pretrained)
-            self.discriminators['night'].init_weights(pretrained=pretrained)
 
-        load_checkpoint(self.segmentor_d, self.pretrained_seg_d)
-        load_checkpoint(self.segmentor_n, self.pretrained_seg_n)
-
-        # Fix teacher net
-        set_requires_grad(self.segmentor_d, False)
+        if self.pretrained_seg_d is not None:
+            load_checkpoint(self.segmentor_d, self.pretrained_seg_d)
+            # Fix teacher net
+            set_requires_grad(self.segmentor_d, False)
+        if self.pretrained_seg_n is not None:
+            load_checkpoint(self.segmentor_n, self.pretrained_seg_n)
 
     def get_module(self, module):
         """Get `nn.ModuleDict` to fit the `MMDistributedDataParallel`
@@ -406,10 +409,10 @@ class CycleSeg(BaseGAN):
                                                is_disc=False)
         # Backward cycle loss
         losses['loss_cycle_a'] = self.cycle_loss(outputs['rec_day'],
-                                                 outputs['real_day'])
+                                                 outputs['real_day']) * self.cycle_loss.loss_weight
         # Backward cycle loss
         losses['loss_cycle_b'] = self.cycle_loss(outputs['rec_night'],
-                                                 outputs['real_night'])
+                                                 outputs['real_night']) * self.cycle_loss.loss_weight
 
         # # CE loss for segmentor_n
 
@@ -419,6 +422,10 @@ class CycleSeg(BaseGAN):
         losses['loss_seg_d'] = self.ce_loss(outputs['seg_pred_night_f'],
                                             label_d)
         losses['loss_seg_n'] = self.ce_loss(outputs['seg_pred_night'], label_n)
+
+        # Perceptual loss
+        # losses['loss_percep_a'], _ = self.perceptual_loss(outputs['rec_day'], outputs['real_day'])
+        # losses['loss_percep_b'], _ = self.perceptual_loss(outputs['rec_night'], outputs['real_night'])
 
         loss_g, log_vars_g = self._parse_losses(losses)
         loss_g.backward()

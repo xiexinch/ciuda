@@ -2,7 +2,10 @@ _base_ = [
     '../_base_/datasets/mmgen_unpaired_imgs_256x256.py',
     '../_base_/default_mmgen_runtime.py'
 ]
-norm_cfg = dict(type='SyncBN', requires_grad=True)
+
+# norm_cfg = dict(type='SyncBN', requires_grad=True)
+norm_cfg = dict(type='BN', requires_grad=True)
+
 model = dict(
     type='CycleSeg',
     generator=dict(type='ResnetGenerator',
@@ -91,19 +94,29 @@ model = dict(
                   loss_weight=1.0),
     cycle_loss=dict(type='L1Loss', loss_weight=10.0, reduction='mean'),
     id_loss=dict(type='L1Loss', loss_weight=0.5, reduction='mean'),
-    pretrained='checkpoints/iter_250000.pth',
+    perceptual_loss=dict(
+       type='PerceptualLoss',
+       layer_weights={'34': 1.0},
+       vgg_type='vgg19',
+       perceptual_weight=1.0,
+       style_weight=0,
+       norm_img=False),
+    pretrained='checkpoints/cycle_iter_50000.pth',
     pretrained_seg_d=
     'checkpoints/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth',
-    # pretrained_seg_n='checkpoints/pspnet_r101_rcs_iter_80000.pth')
     pretrained_seg_n=
-    'checkpoints/pspnet_r101-d8_512x1024_80k_cityscapes_20200606_112211-e1e1100f.pth'
-)
+    'checkpoints/pspnet_r101-d8_512x1024_80k_cityscapes_20200606_112211-e1e1100f.pth',
+    # pretrained_seg_d=None,
+    # pretrained_seg_n=None,
+    )
+
 train_cfg = dict(direction='a2b', buffer_size=10)
 test_cfg = dict(direction='a2b', show_input=True)
 
 domain_a = 'day'  # set by user
 domain_b = 'night'  # set by user
 dataroot = './data/city2darkzurich'
+# generator train pipeline
 train_pipeline = [
     dict(type='LoadImageFromFile',
          io_backend='disk',
@@ -113,13 +126,13 @@ train_pipeline = [
          io_backend='disk',
          key=f'img_{domain_b}',
          flag='color'),
-    dict(type='Resize',
-         keys=[f'img_{domain_a}', f'img_{domain_b}'],
-         scale=(512, 512),
-         interpolation='bicubic'),
+    # dict(type='Resize',
+    #      keys=[f'img_{domain_a}', f'img_{domain_b}'],
+    #      scale=(1920, 1080),
+    #      interpolation='bicubic'),
     dict(type='Crop',
          keys=[f'img_{domain_a}', f'img_{domain_b}'],
-         crop_size=(256, 512),
+         crop_size=(540, 540),
          random_crop=True),
     dict(type='Flip', keys=[f'img_{domain_a}'], direction='horizontal'),
     dict(type='Flip', keys=[f'img_{domain_b}'], direction='horizontal'),
@@ -128,12 +141,38 @@ train_pipeline = [
          keys=[f'img_{domain_a}', f'img_{domain_b}'],
          to_rgb=False,
          mean=[0.5, 0.5, 0.5],
-         std=[0.5, 0.5, 0.5]),
+         std=[0.5, 0.5, 0.5]
+         # mean=[123.675, 116.28, 103.53],
+         # std=[58.395, 57.12, 57.375],
+         # to_rgb=False
+),
+
     dict(type='ImageToTensor', keys=[f'img_{domain_a}', f'img_{domain_b}']),
     dict(type='Collect',
          keys=[f'img_{domain_a}', f'img_{domain_b}'],
          meta_keys=[f'img_{domain_a}_path', f'img_{domain_b}_path'])
 ]
+
+# segmentor test pipeline
+img_norm_cfg = dict(mean=[123.675, 116.28, 103.53],
+                    std=[58.395, 57.12, 57.375],
+                    to_rgb=True)
+test_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(
+        type='MultiScaleFlipAug',
+        img_scale=(1920, 1080),
+        # img_ratios=[0.5, 0.75, 1.0, 1.25, 1.5, 1.75],
+        flip=False,
+        transforms=[
+            dict(type='Resize', keep_ratio=True),
+            dict(type='RandomFlip'),
+            dict(type='Normalize', **img_norm_cfg),
+            dict(type='ImageToTensor', keys=['img']),
+            dict(type='Collect', keys=['img']),
+        ])
+]
+
 dataroot = './data/city2darkzurich'
 data = dict(samples_per_gpu=2,
             workers_per_gpu=4,
@@ -142,7 +181,11 @@ data = dict(samples_per_gpu=2,
                        domain_b=domain_b,
                        pipeline=train_pipeline),
             val=dict(dataroot=dataroot, domain_a=domain_a, domain_b=domain_b),
-            test=dict(dataroot=dataroot, domain_a=domain_a, domain_b=domain_b))
+            test=dict(type='DarkZurichDataset',
+                      data_root='data/dark_zurich/',
+                      img_dir='val/rgb_anon/val/night',
+                      ann_dir='val/gt/val/night',
+                      pipeline=test_pipeline))
 
 # img_norm_cfg = dict(mean=[123.675, 116.28, 103.53],
 #                     std=[58.395, 57.12, 57.375],
@@ -184,7 +227,7 @@ optimizer = dict(generators=dict(type='Adam', lr=0.0002, betas=(0.5, 0.999)),
 lr_config = dict(policy='Linear',
                  by_epoch=False,
                  target_lr=0,
-                 start=10000,
+                 start=125000,
                  interval=1250)
 checkpoint_config = dict(interval=10000, save_optimizer=True, by_epoch=False)
 custom_hooks = [
