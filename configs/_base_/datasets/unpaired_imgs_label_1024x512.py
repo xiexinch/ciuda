@@ -1,8 +1,9 @@
 # dataset settings
 dataset_type = 'CityZurichDataset'
 data_root = 'data/cityscapes/'
-img_norm_cfg = dict(
-    mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
+img_norm_cfg = dict(mean=[123.675, 116.28, 103.53],
+                    std=[58.395, 57.12, 57.375],
+                    to_rgb=True)
 crop_size = (512, 1024)
 train_pipeline = [
     dict(type='LoadImageFromFile'),
@@ -31,32 +32,28 @@ test_pipeline = [
             dict(type='Collect', keys=['img']),
         ])
 ]
-data = dict(
-    samples_per_gpu=4,
-    workers_per_gpu=8,
-    train=dict(
-        type=dataset_type,
-        dataroot=data_root,
-        source_img_dir='leftImg8bit/train',
-        source_ann_dir='gtFine/train',
-        target_img_dir='dark_zurich_night',
-        target_ann_dir='dark_zurich_night_gt',
-        source_img_suffix='_leftImg8bit.png',
-        target_img_suffix='_rgb_anon.png',
-        source_seg_map_suffix='_gtFine_labelTrainIds.png',
-        target_seg_map_suffix='_gt_labelTrainIds.png',
-        test_mode=False,
-        split=None,
-        pipeline=train_pipeline),
-    val=dict(
-        type='DarkZurichDataset',
-        data_root='data/dark_zurich/',
-        img_dir='val/rgb_anon/val/night/GOPR0356',
-        ann_dir='val/gt/val/night/GOPR0356',
-        pipeline=test_pipeline),
-    test=dict(
-        type='DarkZurichDataset',
-        data_root='data/dark_zurich/',
-        img_dir='val/rgb_anon/val/night/GOPR0356',
-        ann_dir='val/gt/val/night/GOPR0356',
-        pipeline=test_pipeline))
+data = dict(samples_per_gpu=4,
+            workers_per_gpu=8,
+            train=dict(type=dataset_type,
+                       dataroot=data_root,
+                       source_img_dir='leftImg8bit/train',
+                       source_ann_dir='gtFine/train',
+                       target_img_dir='dark_zurich_night',
+                       target_ann_dir='dark_zurich_night_gt',
+                       source_img_suffix='_leftImg8bit.png',
+                       target_img_suffix='_rgb_anon.png',
+                       source_seg_map_suffix='_gtFine_labelTrainIds.png',
+                       target_seg_map_suffix='_gt_labelTrainIds.png',
+                       test_mode=False,
+                       split=None,
+                       pipeline=train_pipeline),
+            val=dict(type='DarkZurichDataset',
+                     data_root='data/dark_zurich/',
+                     img_dir='val/rgb_anon/val/night/GOPR0356',
+                     ann_dir='val/gt/val/night/GOPR0356',
+                     pipeline=test_pipeline),
+            test=dict(type='DarkZurichDataset',
+                      data_root='data/dark_zurich/',
+                      img_dir='val/rgb_anon/val/night/GOPR0356',
+                      ann_dir='val/gt/val/night/GOPR0356',
+                      pipeline=test_pipeline))

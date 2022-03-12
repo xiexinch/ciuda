@@ -1,12 +1,14 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from mmgen.models.builder import MODULES
+from mmseg.ops import resize
 
 
 @MODULES.register_module()
-class GANLoss(nn.Module):
+class BatchGANLoss(nn.Module):
     """Define GAN loss.
 
     Args:
@@ -18,7 +20,6 @@ class GANLoss(nn.Module):
             Note that loss_weight is only for generators; and it is always 1.0
             for discriminators.
     """
-
     def __init__(self,
                  gan_type,
                  real_label_val=1.0,
@@ -110,7 +111,9 @@ class GANLoss(nn.Module):
             else:  # for generators in hinge-gan
                 loss = -input.mean()
         else:  # other gan types
-            loss = self.loss(input, target_is_real)
+            label = input.new_ones(input.size()) * target_is_real.unsqueeze(
+                1).unsqueeze(1).unsqueeze(1)
+            loss = self.loss(input, label)
 
         # loss_weight is always 1.0 for discriminators
         return loss if is_disc else loss * self.loss_weight

@@ -3,8 +3,8 @@ _base_ = [
     '../_base_/default_mmgen_runtime.py'
 ]
 
-# norm_cfg = dict(type='SyncBN', requires_grad=True)
-norm_cfg = dict(type='BN', requires_grad=True)
+norm_cfg = dict(type='SyncBN', requires_grad=True)
+# norm_cfg = dict(type='BN', requires_grad=True)
 model = dict(
     type='SegGAN',
     segmentor=dict(
@@ -48,7 +48,7 @@ model = dict(
                        num_conv=3,
                        norm_cfg=dict(type='IN'),
                        init_cfg=dict(type='normal', gain=0.02)),
-    gan_loss=dict(type='GANLoss',
+    gan_loss=dict(type='BatchGANLoss',
                   gan_type='lsgan',
                   real_label_val=1.0,
                   fake_label_val=0.0,
