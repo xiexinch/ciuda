@@ -1,5 +1,6 @@
 import os.path as osp
 
+import torch
 import mmcv
 import numpy as np
 import torch.nn as nn
@@ -12,6 +13,7 @@ from mmgen.models import BaseGAN
 
 from mmseg.models import build_segmentor, build_loss
 from mmseg.ops import resize
+
 
 @MODELS.register_module()
 class SegGAN(BaseGAN):
@@ -48,7 +50,6 @@ class SegGAN(BaseGAN):
             `direction` during testing: a2b | b2a.
         pretrained (str): Path for pretrained model. Default: None.
     """
-
     def __init__(self,
                  segmentor,
                  discriminator,
@@ -63,7 +64,6 @@ class SegGAN(BaseGAN):
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
 
-
         # generators
         self.segmentors = nn.ModuleDict()
         self.segmentors['a'] = build_segmentor(segmentor)
@@ -72,20 +72,17 @@ class SegGAN(BaseGAN):
         self.discriminators = nn.ModuleDict()
         self.discriminators['a'] = build_module(discriminator)
 
-
         # GAN image buffers
         self.image_buffers = dict()
         self.buffer_size = (50 if self.train_cfg is None else
                             self.train_cfg.get('buffer_size', 50))
         self.image_buffers['source'] = GANImageBuffer(self.buffer_size)
 
-
         # losses
         assert gan_loss is not None  # gan loss cannot be None
         self.gan_loss = build_module(gan_loss)
         self.ce_loss = build_loss(ce_loss)
         self.static_loss = build_loss(static_loss)
-
 
         # others
         self.disc_steps = 1 if self.train_cfg is None else self.train_cfg.get(
@@ -109,7 +106,6 @@ class SegGAN(BaseGAN):
         self.segmentors['a'].init_weights()
         self.discriminators['a'].init_weights(pretrained)
 
-
     def get_module(self, module):
         """Get `nn.ModuleDict` to fit the `MMDistributedDataParallel`
         interface.
@@ -125,7 +121,6 @@ class SegGAN(BaseGAN):
             return module.module
 
         return module
-
 
     def forward_train(self, img, label, is_source):
         """Forward function for training.
@@ -143,17 +138,19 @@ class SegGAN(BaseGAN):
 
         feat = segmentor.extract_feat(img)
         pred = segmentor._decode_head_forward_test(feat, dict())
-        pred = resize(input=pred, size=img.shape[2:], mode='bicubic', align_corners=False)
+        pred = resize(input=pred,
+                      size=img.shape[2:],
+                      mode='bilinear',
+                      align_corners=False)
 
         results = dict(img=img,
                        seg_logits=pred,
-                       feat=feat,
+                       feat=feat[-1],
                        label=label,
                        is_source=is_source)
         return results
 
-    def forward_test(self,
-                     **kwargs):
+    def forward_test(self, **kwargs):
         """Forward function for testing.
 
         Args:
@@ -169,7 +166,6 @@ class SegGAN(BaseGAN):
         Returns:
             dict: Dict of forward and evaluation results for testing.
         """
-
 
         segmentors = self.get_module(self.segmentors)
 
@@ -187,7 +183,12 @@ class SegGAN(BaseGAN):
         segmentors = self.get_module(self.segmentors)
         return segmentors['a'].encode_decode(img, img_metas=dict())
 
-    def forward(self, img, label, is_source, test_mode=False):
+    def forward(self,
+                img,
+                label=None,
+                is_source=None,
+                test_mode=False,
+                **kwargs):
         """Forward function.
 
         Args:
@@ -198,9 +199,16 @@ class SegGAN(BaseGAN):
             kwargs (dict): Other arguments.
         """
         if not test_mode:
-            return self.forward_train(img, label, is_source,)
-
-        return self.forward_test()
+            return self.forward_train(
+                img,
+                label,
+                is_source,
+            )
+        segmentor = self.get_module(self.segmentors)['a']
+        return segmentor(return_loss=test_mode,
+                         img=img,
+                         img_metas=dict(),
+                         **kwargs)
 
     def backward_discriminators(self, outputs):
         """Backward function for the discriminators.
@@ -217,10 +225,19 @@ class SegGAN(BaseGAN):
 
         losses = dict()
         # GAN loss for discriminators['a']
-        pred = discriminators['a'](outputs['feat'].detach())
-        losses['loss_gan_d'] = self.gan_loss(pred,
-                                             target_is_real=outputs['is_source'],
-                                             is_disc=True)
+        pred = discriminators['a'](outputs['feat'].detach().contiguous())
+        is_source = outputs['is_source'].data
+        losses['loss_gan_d'] = 0
+        for i, p in enumerate(pred):
+            p = p.unsqueeze(0)
+            losses['loss_gan_d'] += self.gan_loss(p,
+                                                  target_is_real=bool(
+                                                      is_source[i]),
+                                                  is_disc=True)
+
+        # losses['loss_gan_d'] = self.gan_loss(pred,
+        #                                      target_is_real=outputs['is_source'],
+        #                                      is_disc=True)
 
         loss_d_a, log_vars_d_a = self._parse_losses(losses)
         loss_d_a *= 0.5
@@ -243,19 +260,32 @@ class SegGAN(BaseGAN):
         losses = dict()
 
         # GAN loss for segmentors['a']
-        pred = discriminator(outputs['feat'])
-        losses['loss_gan_g'] = self.gan_loss(pred,
-                                             target_is_real=outputs['is_source'],
-                                             is_disc=False)
+        with torch.no_grad():
+            pred = discriminator(outputs['feat'])
+        is_source = outputs['is_source'].data
+        losses['loss_gan_g'] = 0
+        for i, p in enumerate(pred):
+            p = p.unsqueeze(0)
+            losses['loss_gan_g'] += self.gan_loss(p,
+                                                  target_is_real=bool(
+                                                      is_source[i]),
+                                                  is_disc=False)
+        # losses['loss_gan_g'] = self.gan_loss(pred,
+        #                                      target_is_real=outputs['is_source'],
+        #                                      is_disc=False)
         # Forward ce loss
-        is_source = outputs['is_source']
-        if is_source:
-            losses['loss_seg_source'] = self.ce_loss(outputs['seg_logits'],
-                                                 outputs['label'])
-        else:
-            losses['loss_seg_source'] = self.static_loss(outputs['seg_logits'],
-                                                 outputs['label'])
+        losses['loss_seg'] = 0
+        count = 0
+        for i, f in enumerate(is_source):
+            pred = outputs['seg_logits'][i].unsqueeze(0)
+            label = outputs['label'][i]
+            if bool(f.numel()):
+                losses['loss_seg'] += self.ce_loss(pred, label)
+            else:
+                losses['loss_seg'] += self.static_loss(pred, label)
+            count += 1
 
+        losses['loss_seg'] /= count
 
         loss_g, log_vars_g = self._parse_losses(losses)
         loss_g.backward()
@@ -303,14 +333,17 @@ class SegGAN(BaseGAN):
         self.step_counter += 1
 
         segmentor = self.get_module(self.segmentors)['a']
-        seg_source = segmentor.show_result(img, outputs['seg_logits'])
-    
+        segmentor.PALETTE = PALETTE
+        segmentor.CLASSES = CLASSES
+        seg_source = segmentor.show_result(
+            img.permute(0, 2, 3, 1).cpu().numpy()[0],
+            outputs['seg_logits'].detach().cpu().numpy()[0])
 
         log_vars.pop('loss', None)  # remove the unnecessary 'loss'
         results = dict(log_vars=log_vars,
                        num_samples=len(outputs['img']),
-                       results=dict(img_source=img.cpu(),
-                                    seg_source=seg_source))
+                       results=dict(seg_pred=torch.from_numpy(
+                           seg_source).permute(2, 0, 1).unsqueeze(0)))
 
         return results
 
@@ -327,3 +360,14 @@ class SegGAN(BaseGAN):
         # forward generator
         results = self.get_module(self.segmentors)['a'].val_step(data_batch)
         return results
+
+
+CLASSES = ('road', 'sidewalk', 'building', 'wall', 'fence', 'pole',
+           'traffic light', 'traffic sign', 'vegetation', 'terrain', 'sky',
+           'person', 'rider', 'car', 'truck', 'bus', 'train', 'motorcycle',
+           'bicycle')
+PALETTE = [[128, 64, 128], [244, 35, 232], [70, 70, 70], [102, 102, 156],
+           [190, 153, 153], [153, 153, 153], [250, 170, 30], [220, 220, 0],
+           [107, 142, 35], [152, 251, 152], [70, 130, 180], [220, 20, 60],
+           [255, 0, 0], [0, 0, 142], [0, 0, 70], [0, 60, 100], [0, 80, 100],
+           [0, 0, 230], [119, 11, 32]]

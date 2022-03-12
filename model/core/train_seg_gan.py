@@ -16,6 +16,7 @@ from mmgen.datasets import build_dataloader, build_dataset
 from mmgen.utils import get_root_logger
 
 from mmseg.core import DistEvalHook, EvalHook
+from mmseg.datasets import build_dataset as build_mmseg_dataset, build_dataloader as build_mmseg_dataloader
 
 
 def set_random_seed(seed, deterministic=False, use_rank_shift=True):
@@ -33,8 +34,9 @@ def set_random_seed(seed, deterministic=False, use_rank_shift=True):
         rank_shift (bool): Whether to add rank number to the random seed to
             have different random seed in different threads. Default: True.
     """
-    set_random_seed_mmcv(
-        seed, deterministic=deterministic, use_rank_shift=use_rank_shift)
+    set_random_seed_mmcv(seed,
+                         deterministic=deterministic,
+                         use_rank_shift=use_rank_shift)
 
 
 def train_model(model,
@@ -102,27 +104,25 @@ def train_model(model,
                 broadcast_buffers=False,
                 find_unused_parameters=find_unused_parameters)
     else:
-        model = MMDataParallel(
-            model.cuda(cfg.gpu_ids[0]), device_ids=cfg.gpu_ids)
+        model = MMDataParallel(model.cuda(cfg.gpu_ids[0]),
+                               device_ids=cfg.gpu_ids)
 
     # allow users to define the runner
     if cfg.get('runner', None):
         runner = build_runner(
             cfg.runner,
-            dict(
-                model=model,
-                optimizer=optimizer,
-                work_dir=cfg.work_dir,
-                logger=logger,
-                use_apex_amp=_use_apex_amp,
-                meta=meta))
+            dict(model=model,
+                 optimizer=optimizer,
+                 work_dir=cfg.work_dir,
+                 logger=logger,
+                 use_apex_amp=_use_apex_amp,
+                 meta=meta))
     else:
-        runner = IterBasedRunner(
-            model,
-            optimizer=optimizer,
-            work_dir=cfg.work_dir,
-            logger=logger,
-            meta=meta)
+        runner = IterBasedRunner(model,
+                                 optimizer=optimizer,
+                                 work_dir=cfg.work_dir,
+                                 logger=logger,
+                                 meta=meta)
         # set if use dynamic ddp in training
         # is_dynamic_ddp=cfg.get('is_dynamic_ddp', False))
     # an ugly walkaround to make the .log and .log.json filenames the same
@@ -154,22 +154,22 @@ def train_model(model,
                                    cfg.checkpoint_config, cfg.log_config,
                                    cfg.get('momentum_config', None))
 
-    # register eval hooks
-    if validate:
-        val_dataset = build_dataset(cfg.data.val, dict(test_mode=True))
-        val_dataloader = build_dataloader(
-            val_dataset,
-            samples_per_gpu=1,
-            workers_per_gpu=cfg.data.workers_per_gpu,
-            dist=distributed,
-            shuffle=False)
-        eval_cfg = cfg.get('evaluation', {})
-        eval_cfg['by_epoch'] = cfg.runner['type'] != 'IterBasedRunner'
-        eval_hook = DistEvalHook if distributed else EvalHook
-        # In this PR (https://github.com/open-mmlab/mmcv/pull/1193), the
-        # priority of IterTimerHook has been modified from 'NORMAL' to 'LOW'.
-        runner.register_hook(
-            eval_hook(val_dataloader, **eval_cfg), priority='LOW')
+    # # register eval hooks
+    # if validate:
+    #     val_dataset = build_mmseg_dataset(cfg.data.val, dict(test_mode=True))
+    #     val_dataloader = build_mmseg_dataloader(
+    #         val_dataset,
+    #         samples_per_gpu=1,
+    #         workers_per_gpu=cfg.data.workers_per_gpu,
+    #         dist=distributed,
+    #         shuffle=False)
+    #     eval_cfg = cfg.get('evaluation', {})
+    #     eval_cfg['by_epoch'] = False
+    #     eval_hook = DistEvalHook if distributed else EvalHook
+    #     # In this PR (https://github.com/open-mmlab/mmcv/pull/1193), the
+    #     # priority of IterTimerHook has been modified from 'NORMAL' to 'LOW'.
+    #     runner.register_hook(eval_hook(val_dataloader, **eval_cfg),
+    #                          priority='LOW')
 
     # user-defined hooks
     if cfg.get('custom_hooks', None):

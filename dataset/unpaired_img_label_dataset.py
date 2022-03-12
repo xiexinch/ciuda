@@ -15,6 +15,7 @@ from mmgen.datasets.builder import DATASETS
 from mmseg.core import intersect_and_union
 from mmseg.utils import get_root_logger
 from mmseg.datasets.pipelines import LoadAnnotations, Compose
+from mmseg.datasets import CustomDataset
 
 IMG_EXTENSIONS = ('.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG', '.ppm',
                   '.PPM', '.bmp', '.BMP', '.tif', '.TIF', '.tiff', '.TIFF')
@@ -166,13 +167,13 @@ class CityZurichDataset(Dataset):
 
         return self.img_infos[idx].get('ann', None)
 
-    def pre_pipeline(self, results):
+    def pre_pipeline(self, results, is_source):
         """Prepare results dict for pipeline."""
         results['seg_fields'] = []
-        results['img_prefix'] = self.img_dir
-        results['seg_prefix'] = self.ann_dir
-        if self.custom_classes:
-            results['label_map'] = self.label_map
+        results['img_prefix'] = self.source_img_dir if is_source else self.target_img_dir
+        results['seg_prefix'] = self.source_ann_dir if is_source else self.target_ann_dir
+        # if self.custom_classes:
+        #     results['label_map'] = self.source_label_map if is_source else self.target_label_map
 
     def __getitem__(self, idx):
         """Get training/test data after pipeline.
@@ -203,10 +204,10 @@ class CityZurichDataset(Dataset):
 
         img_info = self.img_infos[idx]
         ann_info = self.get_ann_info(idx)
-        results = dict(img_info=img_info, ann_info=ann_info)
-        self.pre_pipeline(results)
+        results = dict(img_info=img_info, ann_info=ann_info, is_source=img_info['is_source'])
+        self.pre_pipeline(results, img_info['is_source'])
         results = self.pipeline(results)
-        results['is_source'] = img_info['is_source']
+        # results['is_source'] = img_info['is_source']
         return results
 
 
@@ -291,22 +292,6 @@ class CityZurichDataset(Dataset):
 
         return result_copy
 
-    def prepare_train_img(self, idx):
-        """Get training data and annotations after pipeline.
-
-        Args:
-            idx (int): Index of data.
-
-        Returns:
-            dict: Training data and annotation after pipeline with new keys
-                introduced by pipeline.
-        """
-
-        img_info = self.img_infos[idx]
-        ann_info = self.get_ann_info(idx)
-        results = dict(img_info=img_info, ann_info=ann_info)
-        self.pre_pipeline(results)
-        return self.pipeline(results)
 
     def prepare_test_img(self, idx):
         """Get testing data after pipeline.
@@ -325,7 +310,7 @@ class CityZurichDataset(Dataset):
         return self.pipeline(results)
 
     def __len__(self):
-        return max(self.len_a, self.len_b, self.len_c)
+        return len(self.img_infos)
 
     @staticmethod
     def scan_folder(path):
@@ -356,9 +341,9 @@ class CityZurichDataset(Dataset):
             idx (int): Index for getting each item.
         """
         if not self.test_mode:
-            return self.prepare_train_data(idx)
+            return self.prepare_train_img(idx)
 
-        return self.prepare_test_data(idx)
+        return self.prepare_test_img(idx)
 
 
     def results2img(self, results, imgfile_prefix, to_label_id, indices=None):
