@@ -120,10 +120,10 @@ def main():
 
     mmcv.print_log(f'Sampling model: {args.sample_model}', 'mmgen')
 
-    model.eval()
-
     _ = load_checkpoint(model, args.checkpoint, map_location='cpu')
     model = MMDataParallel(model, device_ids=[0])
+    model.cuda()
+    model.eval()
 
     test_dataset = build_dataset(cfg.data.test)
     test_dataloader = build_dataloader(test_dataset,
@@ -142,20 +142,19 @@ def main():
     # data = scatter(collate([data], samples_per_gpu=1), [device])[0]
     progress_bar = mmcv.ProgressBar(len(test_dataset))
     for idx, data in enumerate(test_dataloader):
-        name = str(data['meta'].data[0][0]['img_a_path']).replace(
-            './data/city2darkzurich/testA/', '')
+        name = str(data['meta'].data[0][0]['img_c_path']).replace(
+            './data/city2darkzurich/testC/', '')
         dirname = os.path.dirname(name)
         name = name.replace(dirname, '')
         dirname = dirname.replace('\\', '/')
         with torch.no_grad():
             results = model(test_mode=True, **data)
-        save_dir = os.path.dirname(args.save_path) + '/' + dirname
+        save_dir = os.path.dirname(args.save_path) + '/day/' + dirname
 
         mmcv.mkdir_or_exist(save_dir)
-        utils.save_image((results['fake_b'][:, [2, 1, 0]] + 1.) / 2.,
+        utils.save_image((results['fake_a'][:, [2, 1, 0]] + 1.) / 2.,
                          save_dir + '/' + name)
         progress_bar.update()
-
 
 
 if __name__ == '__main__':

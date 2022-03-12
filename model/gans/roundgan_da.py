@@ -250,19 +250,21 @@ class RoundGAN(BaseGAN):
         generators = self.get_module(self.generators)
 
         # fake_b = generators['a'](real_a)
-        # fake_c = generators['c'](real_b)
-        # fake_a = generators['b'](real_c)
-        fake_c = generators['b']((generators['a'](real_a) + 1.) / 2.)
+        # fake_c = generators['b'](fake_b)
+
+        fake_a = generators['c'](real_c)
+        # fake_c = generators['b']((generators['a'](real_a) + 1.) / 2.)
         # fake_a = generators['c'](generators['b'](real_b))
-        fake_b = generators['a'](real_a)
+        # fake_b = generators['a'](real_a)
 
         results = dict(
-            real_a=real_a.cpu(),
-            fake_b=fake_b.cpu(),
-            real_b=real_b.cpu(),
-            #    fake_a=fake_a.cpu(),
-            real_c=real_c.cpu(),
-            fake_c=fake_c.cpu())
+            # real_a=real_a.cpu(),
+            # fake_b=fake_b.cpu(),
+            # real_b=real_b.cpu(),
+            fake_a=fake_a.cpu(),
+            # real_c=real_c.cpu(),
+            # fake_c=fake_c.cpu()
+        )
 
         # save image
         if save_image:
@@ -446,14 +448,14 @@ class RoundGAN(BaseGAN):
                                                target_is_real=True,
                                                is_disc=False)
         # Forward cycle loss
-        losses['loss_cycle_a'] = self.cycle_loss(outputs['rec_a'],
-                                                 outputs['real_a']) * self.cycle_loss.loss_weight
+        losses['loss_cycle_a'] = self.cycle_loss(
+            outputs['rec_a'], outputs['real_a']) * self.cycle_loss.loss_weight
         # Backward cycle loss
-        losses['loss_cycle_b'] = self.cycle_loss(outputs['rec_b'],
-                                                 outputs['real_b']) * self.cycle_loss.loss_weight
+        losses['loss_cycle_b'] = self.cycle_loss(
+            outputs['rec_b'], outputs['real_b']) * self.cycle_loss.loss_weight
         # Backward cycle loss
-        losses['loss_cycle_c'] = self.cycle_loss(outputs['rec_c'],
-                                                 outputs['real_c']) * self.cycle_loss.loss_weight
+        losses['loss_cycle_c'] = self.cycle_loss(
+            outputs['rec_c'], outputs['real_c']) * self.cycle_loss.loss_weight
 
         loss_g, log_vars_g = self._parse_losses(losses)
         loss_g.backward()
