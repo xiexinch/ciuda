@@ -18,9 +18,8 @@ from mmgen.utils import collect_env, get_root_logger
 
 from model.gans import *  # noqa
 from dataset import *  # noqa
-from model.losses import * # noqa
+from model.losses import *  # noqa
 from model.core import train_model
-
 
 
 def parse_args():
@@ -118,13 +117,13 @@ def main():
     # environment info and seed, which will be logged
     meta = dict()
     # log env info
-    env_info_dict = collect_env()
-    env_info = '\n'.join([(f'{k}: {v}') for k, v in env_info_dict.items()])
-    dash_line = '-' * 60 + '\n'
-    logger.info('Environment info:\n' + dash_line + env_info + '\n' +
-                dash_line)
-    meta['env_info'] = env_info
-    meta['config'] = cfg.pretty_text
+    # env_info_dict = collect_env()
+    # env_info = '\n'.join([(f'{k}: {v}') for k, v in env_info_dict.items()])
+    # dash_line = '-' * 60 + '\n'
+    # logger.info('Environment info:\n' + dash_line + env_info + '\n' +
+    #             dash_line)
+    # meta['env_info'] = env_info
+    # meta['config'] = cfg.pretty_text
     # log some basic info
     logger.info(f'Distributed training: {distributed}')
     logger.info(f'Config:\n{cfg.pretty_text}')
