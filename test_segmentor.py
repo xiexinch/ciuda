@@ -138,7 +138,8 @@ def main():
 
     # build the model and load checkpoint
     cfg.model.train_cfg = None
-    model = build_model(cfg.model, test_cfg=cfg.get('test_cfg'))
+    model = build_segmentor(cfg.model, test_cfg=cfg.get('test_cfg'))
+    # model = build_model(cfg.model, test_cfg=cfg.get('test_cfg'))
     fp16_cfg = cfg.get('fp16', None)
     if fp16_cfg is not None:
         wrap_fp16_model(model)
@@ -183,8 +184,8 @@ def main():
         tmpdir = None
 
     if not distributed:
-        # model = MMDataParallel(model, device_ids=[0])
-        model = MMDataParallel(model.segmentor_n, device_ids=[0])
+        model = MMDataParallel(model, device_ids=[0])
+        # model = MMDataParallel(model.segmentor_n, device_ids=[0])
         results = single_gpu_test(model,
                                   data_loader,
                                   args.show,
