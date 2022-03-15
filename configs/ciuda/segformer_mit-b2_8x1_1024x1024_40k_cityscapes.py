@@ -36,5 +36,4 @@ data = dict(samples_per_gpu=2,
                       img_dir='rgb_anon/val/night/GOPR0356',
                       ann_dir='gt/val/night/GOPR0356',
                       pipeline=test_pipeline))
-
-checkpoint = 'checkpoints/segformer_iter_80000_v1.pth'
+checkpoint = None

@@ -1,10 +1,11 @@
 import os.path as osp
 from mmcv.parallel import DataContainer
-# from mmseg.datasets import DATASETS
+from mmseg.datasets import DATASETS
 from mmseg.datasets.pipelines import Compose
 from torch.utils.data import Dataset
 
-from mmgen.datasets.builder import DATASETS
+# from mmgen.datasets.builder import DATASETS
+
 
 @DATASETS.register_module()
 class ZurichPairDataset(Dataset):

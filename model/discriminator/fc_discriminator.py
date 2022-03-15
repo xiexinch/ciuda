@@ -2,6 +2,7 @@ import torch.nn as nn
 
 
 class FCDiscriminator(nn.Module):
+
     def __init__(self, in_channels, base_channels=64, num_convs=4):
         super(FCDiscriminator, self).__init__()
         self.conv1 = nn.Conv2d(in_channels,
