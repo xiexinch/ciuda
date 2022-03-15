@@ -36,4 +36,4 @@ data = dict(samples_per_gpu=2,
                       img_dir='rgb_anon/val/night/GOPR0356',
                       ann_dir='gt/val/night/GOPR0356',
                       pipeline=test_pipeline))
-checkpoint = None
+checkpoint = 'checkpoints/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
