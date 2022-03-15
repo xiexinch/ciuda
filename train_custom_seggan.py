@@ -159,6 +159,7 @@ def parse_args():
 
 
 class Logger(object):
+
     def __init__(self, filename):
         self.terminal = sys.stdout
         self.log = open(filename, 'a')
@@ -191,8 +192,8 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
         print(cfg.gpu_ids)
 
     model = build_segmentor(cfg.model)
-    discriminator_1 = FCDiscriminator(in_channels=19)
-    discriminator_2 = FCDiscriminator(in_channels=19)
+    discriminator_1 = FCDiscriminator(in_channels=512)
+    # discriminator_2 = FCDiscriminator(in_channels=19)
 
     if cfg.checkpoint:
         load_checkpoint(model, cfg.checkpoint)
@@ -214,11 +215,11 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
             broadcast_buffers=False,
             find_unused_parameters=False).module
 
-        discriminator_2 = MMDistributedDataParallel(
-            discriminator_2.cuda(),
-            device_ids=[torch.cuda.current_device()],
-            broadcast_buffers=False,
-            find_unused_parameters=False).module
+        # discriminator_2 = MMDistributedDataParallel(
+        #     discriminator_2.cuda(),
+        #     device_ids=[torch.cuda.current_device()],
+        #     broadcast_buffers=False,
+        #     find_unused_parameters=False).module
 
         # model = MMDataParallel(model.cuda(cfg.gpu_ids[0]),
         #                        device_ids=[torch.cuda.current_device()]).module
@@ -232,7 +233,7 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
     else:
         model = model.cuda()
         discriminator_1 = discriminator_1.cuda()
-        discriminator_2 = discriminator_2.cuda()
+        # discriminator_2 = discriminator_2.cuda()
 
     # init dataloader
     source_dataloader = build_dataloader(
@@ -275,9 +276,9 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
     adv_optimizer_1 = torch.optim.Adam(discriminator_1.parameters(),
                                        lr=1e-4,
                                        betas=(0.9, 0.999))
-    adv_optimizer_2 = torch.optim.Adam(discriminator_2.parameters(),
-                                       lr=1e-4,
-                                       betas=(0.9, 0.999))
+    # adv_optimizer_2 = torch.optim.Adam(discriminator_2.parameters(),
+    #                                    lr=1e-4,
+    #                                    betas=(0.9, 0.999))
     seg_lr_updater = PolyLrUpdater(base_lr=0.01,
                                    max_iters=max_iters,
                                    min_lr=1e-4,
@@ -356,23 +357,50 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
 
         # Train Segmentor
         set_require_grad(discriminator_1, False)
-        set_require_grad(discriminator_2, False)
+        # set_require_grad(discriminator_2, False)
         set_require_grad(model, True)
         seg_optimizer.zero_grad()
 
+        ############################################################################################ # noqa
+        # Train with source
+
+        # source_predicts = model.encode_decode(source_imgs, img_metas=dict())
+        source_feat = model.extract_feat(source_imgs)
+        pred = model._decode_head_forward_test(source_feat, dict())
+        source_predicts = resize(input=pred,
+                                 size=source_imgs.shape[2:],
+                                 mode='bilinear',
+                                 align_corners=False)
+        loss_source = ce_loss(source_predicts, source_labels.squeeze(1))
+        loss_source.backward()
+
+        ############################################################################################ # noqa
+
         # Train with target
 
-        target_predicts_day = model.encode_decode(target_img_day,
-                                                  img_metas=dict())  # noqa
+        target_feat = model.extract_feat(target_img_day)
+        pred = model._decode_head_forward_test(target_feat, dict())
+        target_predicts_day = resize(input=pred,
+                                     size=target_img_day.shape[2:],
+                                     mode='bilinear',
+                                     align_corners=False)
 
-        d1_out = discriminator_1(target_predicts_day)
+        # target_predicts_day = model.encode_decode(target_img_day,
+        #                                           img_metas=dict())  # noqa
+
+        target_feat_night = model.extract_feat(target_img_night)
+        pred = model._decode_head_forward_test(target_feat_night, dict())
+        target_predicts_night = resize(input=pred,
+                                       size=target_img_night.shape[2:],
+                                       mode='bilinear',
+                                       align_corners=False)
+
+        d1_out = discriminator_1(target_feat_night)
         d1_label = torch.FloatTensor(d1_out.data.size()).fill_(1).cuda()
         # loss_adv_target_day = least_square_loss(d1_out, d1_label) * 0.01
-        loss_adv_target_day = bce_loss(d1_out, d1_label) * 0.01
-        loss_adv_target_day.backward(retain_graph=True)
+        loss_adv_target_night = bce_loss(d1_out, d1_label)
+        # loss_adv_target_day.backward(retain_graph=True)
 
-        target_predicts_night = model.encode_decode(target_img_night,
-                                                    img_metas=dict())  # noqa
         pseudo_prob = torch.zeros_like(target_predicts_day)
         threshold = torch.ones_like(target_predicts_day[:, :11, :, :]) * 0.2
         threshold[target_predicts_day[:, :11, :, :] > 0.4] = 0.8
@@ -393,20 +421,10 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
         #                           pseudo_gt)
         loss_static = static_loss(target_predicts_night, pseudo_gt)
 
-        d2_out = discriminator_2(target_predicts_day)
-        d2_label = torch.FloatTensor(d2_out.data.size()).fill_(1).cuda()
-        # loss_adv_target_night = least_square_loss(d2_out, d2_label)
-        loss_adv_target_night = bce_loss(d2_out, d2_label)
-        loss = 0.01 * loss_adv_target_night + loss_static
-        loss.backward(retain_graph=True)
+        loss = loss_static + 0.01 * loss_adv_target_night  # noqa
+        loss.backward()
 
-        ############################################################################################ # noqa
-        # Train with source
-
-        source_predicts = model.encode_decode(source_imgs, img_metas=dict())
-        loss_source = ce_loss(source_predicts, source_labels.squeeze(1))
-        # save cuda memory
-        loss_source.backward()
+        loss_adv_value = loss_adv_target_night.item()
 
         loss_seg_value = loss_source.item()
         loss_static_value = loss_static.item()
@@ -427,62 +445,60 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
             ETA = f'{int(days)}天{int(hour)}小时{int(minute)}分{int(s)}秒'
             if rank == 0:
                 print(
-                    'Iter-[{0:5d}|{1:6d}] loss_adv_source:         loss_adv_target_day:         loss_adv_target_night:         loss_source_value: {2:.5f} loss_static_value: {3:.5f} lr_seg: {4:.5f} lr_adv_1: {5:.5f} lr_adv_2: {6: .5f} ETA: {7} '  # noqa
+                    'Iter-[{0:5d}|{1:6d}] loss_adv_source:         loss_adv_target_day:         loss_adv_target_night:         loss_source_value: {2:.5f} loss_static_value: {3:.5f} lr_seg: {4:.5f} lr_adv_1: {5:.5f}  ETA: {6} '  # noqa
                     .format(i, max_iters, loss_seg_value, loss_static_value,
                             seg_optimizer.param_groups[0]['lr'],
-                            adv_optimizer_1.param_groups[0]['lr'],
-                            adv_optimizer_2.param_groups[0]['lr'], ETA))
+                            adv_optimizer_1.param_groups[0]['lr'], ETA))
             continue
 
         ########################################################################################### # noqa
 
         # Train Discriminator network
         set_require_grad(discriminator_1, True)
-        set_require_grad(discriminator_2, True)
+        # set_require_grad(discriminator_2, True)
         set_require_grad(model, False)
         adv_optimizer_1.zero_grad()
-        adv_optimizer_2.zero_grad()
+        # adv_optimizer_2.zero_grad()
 
         ########################################################################################### # noqa
         # Train with source
 
-        source_predicts = source_predicts.detach().contiguous()
-        d1_out = discriminator_1(source_predicts)
+        source_feat = source_feat.detach().contiguous()
+        d1_out = discriminator_1(source_feat)
         d1_label = torch.FloatTensor(d1_out.data.size()).fill_(0).cuda()
         # loss_d1 = least_square_loss(d1_out, d1_label) * 0.5
         loss_d1 = bce_loss(d1_out, d1_label) * 0.5
         loss_d1.backward()
 
-        source_predicts = source_predicts.detach().contiguous()
-        d2_out = discriminator_2(source_predicts)
-        d2_label = torch.FloatTensor(d2_out.data.size()).fill_(0).cuda()
+        # source_predicts = source_predicts.detach().contiguous()
+        # d2_out = discriminator_2(source_predicts)
+        # d2_label = torch.FloatTensor(d2_out.data.size()).fill_(0).cuda()
         # loss_d2 = least_square_loss(d2_out, d2_label) * 0.5
-        loss_d2 = bce_loss(d2_out, d2_label) * 0.5
-        loss_d2.backward()
+        # loss_d2 = bce_loss(d2_out, d2_label) * 0.5
+        # loss_d2.backward()
 
-        loss_adv_source_value = loss_d1.item() + loss_d2.item()
+        loss_adv_value += loss_d1.item()
 
         ########################################################################################### # noqa
         # Train with target
 
-        target_predicts_day = target_predicts_day.detach().contiguous()
-        target_predicts_night = target_predicts_night.detach().contiguous()
+        target_feat_night = target_feat_night.detach().contiguous()
 
-        d1_out = discriminator_1(target_predicts_day)
+        d1_out = discriminator_1(target_feat_night)
         d1_label = torch.FloatTensor(d1_out.data.size()).fill_(1).cuda()
         # loss_d1 = least_square_loss(d1_out, d1_label)
-        loss_d1 = bce_loss(d1_out, d1_label)
+        loss_d1 = bce_loss(d1_out, d1_label) * 0.5
         loss_d1.backward()
         adv_optimizer_1.step()
         adv_lr_updater.set_lr(adv_optimizer_1, i)
 
-        d2_out = discriminator_2(target_predicts_night)
-        d2_label = torch.FloatTensor(d2_out.data.size()).fill_(1).cuda()
+        # d2_out = discriminator_2(target_predicts_night)
+        # d2_label = torch.FloatTensor(d2_out.data.size()).fill_(1).cuda()
         # loss_d2 = least_square_loss(d2_out, d2_label)
-        loss_d2 = bce_loss(d2_out, d2_label)
-        loss_d2.backward()
-        adv_optimizer_2.step()
-        adv_lr_updater.set_lr(adv_optimizer_2, i)
+        # loss_d2 = bce_loss(d2_out, d2_label)
+        # loss_d2.backward()
+        # adv_optimizer_2.step()
+        # adv_lr_updater.set_lr(adv_optimizer_2, i)
 
         ########################################################################################### # noqa
 
@@ -496,11 +512,16 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
         if rank == 0:
             print(
                 'Iter-[{0:5d}|{1:6d}] loss_adv_source: {2:.5f} loss_adv_target_day: {3:.5f} loss_adv_target_night: {4:.5f} loss_source_value: {5:.5f} loss_static_value: {6:.5f} lr_seg: {7:.5f} lr_adv_1: {8:.5f} lr_adv_2: {9:.5f} ETA: {10} '  # noqa
-                .format(i, max_iters, loss_adv_source_value, loss_d1.item(),
-                        loss_d2.item(), loss_seg_value, loss_static_value,
-                        seg_optimizer.param_groups[0]['lr'],
-                        adv_optimizer_1.param_groups[0]['lr'],
-                        adv_optimizer_2.param_groups[0]['lr'], ETA))
+                .format(
+                    i,
+                    max_iters,
+                    loss_adv_value,
+                    loss_d1.item(),
+                    # loss_d2.item(), loss_seg_value, loss_static_value,
+                    seg_optimizer.param_groups[0]['lr'],
+                    adv_optimizer_1.param_groups[0]['lr'],
+                    # adv_optimizer_2.param_groups[0]['lr'],
+                    ETA))
 
         if i % 4000 == 0 and i != 0:
             model.eval()
@@ -517,8 +538,8 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
 
             torch.save(discriminator_1.state_dict(),
                        osp.join(work_dirs, f'discriminator_1_{i}.pth'))
-            torch.save(discriminator_2.state_dict(),
-                       osp.join(work_dirs, f'discriminator_2_{i}.pth'))
+            # torch.save(discriminator_2.state_dict(),
+            #            osp.join(work_dirs, f'discriminator_2_{i}.pth'))
 
 
 if __name__ == '__main__':
