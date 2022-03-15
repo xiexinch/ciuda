@@ -261,33 +261,28 @@ class SegGAN(BaseGAN):
         losses = dict()
 
         # GAN loss for segmentors['a']
-        with torch.no_grad():
-            pred = discriminator(outputs['feat'])
+        # with torch.no_grad():
+        #     pred = discriminator(outputs['feat'])
+        pred = discriminator(outputs['feat'])
         is_source = outputs['is_source'].data
-        # losses['loss_gan_g'] = 0
-        # for i, p in enumerate(pred):
-        #     p = p.unsqueeze(0)
-        #     losses['loss_gan_g'] += self.gan_loss(p,
-        #                                           target_is_real=bool(
-        #                                               is_source[i]),
-        #                                           is_disc=False)
+
         losses['loss_gan_g'] = self.gan_loss(
             pred,
             target_is_real=outputs['is_source'].float().contiguous(),
             is_disc=False)
         # Forward ce loss
-        # losses['loss_seg'] = 0
-        # count = 0
-        # for i, f in enumerate(is_source):
-        #     pred = outputs['seg_logits'][i].unsqueeze(0)
-        #     label = outputs['label'][i]
-        #     if bool(f.numel()):
-        #         losses['loss_seg'] += self.ce_loss(pred, label)
-        #     else:
-        #         losses['loss_seg'] += self.static_loss(pred, label)
-        #     count += 1
+#         losses['loss_seg'] = 0
+#         count = 0
+#         for i, f in enumerate(is_source):
+#             pred = outputs['seg_logits'][i].unsqueeze(0)
+#             label = outputs['label'][i]
+#             if bool(f.numel()):
+#                 losses['loss_seg'] += self.ce_loss(pred, label)
+#             else:
+#                 losses['loss_seg'] += self.static_loss(pred, label)
+#             count += 1
 
-        # losses['loss_seg'] /= count
+#         losses['loss_seg'] /= count
 
         pred = outputs['seg_logits']
         label = outputs['label'].squeeze(1)
