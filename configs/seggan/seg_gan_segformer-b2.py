@@ -2,7 +2,12 @@ _base_ = [
     '../_base_/datasets/unpaired_imgs_label_1024x512.py',
     '../_base_/default_mmgen_runtime.py'
 ]
-
+log_config = dict(
+    interval=50,
+    hooks=[
+        dict(type='TextLoggerHook'),
+        # dict(type='TensorboardLoggerHook'),
+    ])
 norm_cfg = dict(type='SyncBN', requires_grad=True)
 # norm_cfg = dict(type='BN', requires_grad=True)
 model = dict(
@@ -56,7 +61,7 @@ model = dict(
     ce_loss=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
     static_loss=dict(type='CrossEntropyLoss',
                      use_sigmoid=False,
-                     loss_weight=1.0,
+                     loss_weight=0.4,
                      class_weight=[
                          1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
                          0., 0., 0., 0., 0., 0., 0., 0.
@@ -92,6 +97,6 @@ runner = None
 use_ddp_wrapper = True
 total_iters = 80000
 workflow = [('train', 1)]
-exp_name = 'seggan_202203141045'
+exp_name = 'seggan_202203141628'
 work_dir = f'./work_dirs/experiments/{exp_name}'
 # evaluation = dict(interval=100, metric='mIoU', pre_eval=True)

@@ -46,7 +46,11 @@ def main():
     _ = load_checkpoint(model, args.checkpoint, map_location='cpu')
 
     segmentor = model.segmentors['a']
+<<<<<<< HEAD
     torch.save(segmentor.state_dict(), 's_segformer_iter_64000.pth')
+=======
+    torch.save(segmentor.state_dict(), 's_segformer_iter_80000.pth')
+>>>>>>> 07a8384945a24d145d2716e50a959015a4afe190
 
 
 if __name__ == '__main__':

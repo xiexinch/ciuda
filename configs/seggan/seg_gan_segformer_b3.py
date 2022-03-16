@@ -20,7 +20,7 @@ model = dict(
             in_channels=3,
             embed_dims=64,
             num_stages=4,
-            num_layers=[3, 8, 27, 3],
+            num_layers=[3, 4, 18, 3],
             num_heads=[1, 2, 5, 8],
             patch_sizes=[7, 3, 3, 3],
             sr_ratios=[8, 4, 2, 1],
@@ -30,13 +30,12 @@ model = dict(
             drop_rate=0.0,
             attn_drop_rate=0.0,
             drop_path_rate=0.1,
-<<<<<<< HEAD
-              # init_cfg=dict(type='Pretrained',
-              #               checkpoint='pretrain/mit_b4.pth')
-=======
               init_cfg=dict(type='Pretrained',
-                            checkpoint='pretrain/mit_b4.pth')
->>>>>>> 07a8384945a24d145d2716e50a959015a4afe190
+<<<<<<< HEAD:configs/seggan/seg_gan_segformer.py
+                            checkpoint='pretrain/mit_b2.pth')
+=======
+                            checkpoint='pretrain/mit_b3.pth')
+>>>>>>> 07a8384945a24d145d2716e50a959015a4afe190:configs/seggan/seg_gan_segformer_b3.py
         ),
         decode_head=dict(type='SegformerHead',
                          in_channels=[64, 128, 320, 512],
@@ -102,6 +101,10 @@ runner = None
 use_ddp_wrapper = True
 total_iters = 80000
 workflow = [('train', 1)]
-exp_name = 'seggan_202203131034_mit-b4'
+<<<<<<< HEAD:configs/seggan/seg_gan_segformer.py
+exp_name = 'seggan_202203141045'
+=======
+exp_name = 'seggan_202203121628'
+>>>>>>> 07a8384945a24d145d2716e50a959015a4afe190:configs/seggan/seg_gan_segformer_b3.py
 work_dir = f'./work_dirs/experiments/{exp_name}'
 # evaluation = dict(interval=100, metric='mIoU', pre_eval=True)

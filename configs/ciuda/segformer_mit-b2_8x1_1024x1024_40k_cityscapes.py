@@ -33,13 +33,7 @@ data = dict(samples_per_gpu=2,
                      pipeline=test_pipeline),
             test=dict(type='DarkZurichDataset',
                       data_root='data/dark_zurich/val',
-<<<<<<< HEAD
-                      img_dir='rgb_anon/val/night',
-                      ann_dir='gt/val/night',
-=======
                       img_dir='rgb_anon/val/night/GOPR0356',
                       ann_dir='gt/val/night/GOPR0356',
->>>>>>> 07a8384945a24d145d2716e50a959015a4afe190
                       pipeline=test_pipeline))
-
-checkpoint = 'checkpoints/segformer_iter_80000_v1.pth'
+checkpoint = 'checkpoints/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'  # noqa
