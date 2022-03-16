@@ -18,7 +18,7 @@ import torch.distributed as dist
 
 from model.backbone import *  # noqa
 from model.seg_head import RefineNet  # noqa
-from model.discriminator import FCDiscriminator
+from model.discriminator import SimpleFCDiscriminator
 from model import StaticLoss, least_square_loss
 from dataset import ZurichPairDataset  # noqa
 from utils import PolyLrUpdater
@@ -192,7 +192,7 @@ def main(max_iters: int, work_dirs='work_dirs', distributed=False):
         print(cfg.gpu_ids)
 
     model = build_segmentor(cfg.model)
-    discriminator_1 = FCDiscriminator(in_channels=512)
+    discriminator_1 = SimpleFCDiscriminator(in_channels=512)
     # discriminator_2 = FCDiscriminator(in_channels=19)
 
     if cfg.checkpoint:
