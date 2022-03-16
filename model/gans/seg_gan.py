@@ -276,23 +276,23 @@ class SegGAN(BaseGAN):
             target_is_real=outputs['is_source'].float().contiguous(),
             is_disc=False)
         # Forward ce loss
-        # losses['loss_seg'] = 0
-        # count = 0
-        # for i, f in enumerate(is_source):
-        #     pred = outputs['seg_logits'][i].unsqueeze(0)
-        #     label = outputs['label'][i]
-        #     if bool(f.numel()):
-        #         losses['loss_seg'] += self.ce_loss(pred, label)
-        #     else:
-        #         losses['loss_seg'] += self.static_loss(pred, label)
-        #     count += 1
+        losses['loss_seg'] = 0
+        count = 0
+        for i, f in enumerate(is_source):
+            pred = outputs['seg_logits'][i].unsqueeze(0)
+            label = outputs['label'][i]
+            if bool(f.numel()):
+                losses['loss_seg'] += self.ce_loss(pred, label)
+            else:
+                losses['loss_seg'] += self.static_loss(pred, label)
+            count += 1
 
-        # losses['loss_seg'] /= count
+        losses['loss_seg'] /= count
 
-        pred = outputs['seg_logits']
-        label = outputs['label'].squeeze(1)
-        losses['loss_static'] = self.static_loss(pred, label)
-        losses['loss_seg'] = self.ce_loss(pred, label)
+        # pred = outputs['seg_logits']
+        # label = outputs['label'].squeeze(1)
+        # losses['loss_static'] = self.static_loss(pred, label)
+        # losses['loss_seg'] = self.ce_loss(pred, label)
 
         loss_g, log_vars_g = self._parse_losses(losses)
         loss_g.backward()

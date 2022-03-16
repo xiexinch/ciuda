@@ -2,7 +2,12 @@ _base_ = [
     '../_base_/datasets/unpaired_imgs_label_1024x512.py',
     '../_base_/default_mmgen_runtime.py'
 ]
-
+log_config = dict(
+    interval=50,
+    hooks=[
+        dict(type='TextLoggerHook'),
+        # dict(type='TensorboardLoggerHook'),
+    ])
 norm_cfg = dict(type='SyncBN', requires_grad=True)
 # norm_cfg = dict(type='BN', requires_grad=True)
 model = dict(
@@ -15,7 +20,7 @@ model = dict(
             in_channels=3,
             embed_dims=64,
             num_stages=4,
-            num_layers=[3, 4, 6, 3],
+            num_layers=[3, 8, 27, 3],
             num_heads=[1, 2, 5, 8],
             patch_sizes=[7, 3, 3, 3],
             sr_ratios=[8, 4, 2, 1],
@@ -25,8 +30,8 @@ model = dict(
             drop_rate=0.0,
             attn_drop_rate=0.0,
             drop_path_rate=0.1,
-              init_cfg=dict(type='Pretrained',
-                            checkpoint='pretrain/mit_b2.pth')
+              # init_cfg=dict(type='Pretrained',
+              #               checkpoint='pretrain/mit_b4.pth')
         ),
         decode_head=dict(type='SegformerHead',
                          in_channels=[64, 128, 320, 512],
@@ -92,6 +97,6 @@ runner = None
 use_ddp_wrapper = True
 total_iters = 80000
 workflow = [('train', 1)]
-exp_name = 'seggan_202203141045'
+exp_name = 'seggan_202203131034_mit-b4'
 work_dir = f'./work_dirs/experiments/{exp_name}'
 # evaluation = dict(interval=100, metric='mIoU', pre_eval=True)
