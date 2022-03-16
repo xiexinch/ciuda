@@ -20,6 +20,7 @@ from model.gans import *  # noqa
 from dataset import *  # noqa
 from model.losses import *  # noqa
 from model.core import train_model
+from model.discriminator import *  # noqa
 
 
 def parse_args():

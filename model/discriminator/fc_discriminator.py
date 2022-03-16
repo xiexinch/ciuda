@@ -1,6 +1,9 @@
 import torch.nn as nn
 
+from mmgen.models import MODULES
 
+
+@MODULES.register_module()
 class SimpleFCDiscriminator(nn.Module):
 
     def __init__(self, in_channels):
