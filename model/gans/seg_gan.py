@@ -241,9 +241,9 @@ class SegGAN(BaseGAN):
             is_disc=True)
 
         loss_d_a, log_vars_d_a = self._parse_losses(losses)
-        loss_d_a *= 0.5
+        # loss_d_a *= 0.5
         loss_d_a.backward()
-        log_vars_d['loss_gan_d'] = log_vars_d_a['loss'] * 0.5
+        log_vars_d['loss_gan_d'] = log_vars_d_a['loss']
 
         return log_vars_d
 
@@ -269,9 +269,8 @@ class SegGAN(BaseGAN):
         losses['loss_gan_g'] = self.gan_loss(
             pred,
             target_is_real=outputs['is_source'].float().contiguous(),
-            is_disc=False)
+            is_disc=False) * 0.001
         # Forward ce loss
-<<<<<<< HEAD
         losses['loss_seg'] = 0
         count = 0
         for i, f in enumerate(is_source):
@@ -289,25 +288,6 @@ class SegGAN(BaseGAN):
         # label = outputs['label'].squeeze(1)
         # losses['loss_static'] = self.static_loss(pred, label)
         # losses['loss_seg'] = self.ce_loss(pred, label)
-=======
-#         losses['loss_seg'] = 0
-#         count = 0
-#         for i, f in enumerate(is_source):
-#             pred = outputs['seg_logits'][i].unsqueeze(0)
-#             label = outputs['label'][i]
-#             if bool(f.numel()):
-#                 losses['loss_seg'] += self.ce_loss(pred, label)
-#             else:
-#                 losses['loss_seg'] += self.static_loss(pred, label)
-#             count += 1
-
-#         losses['loss_seg'] /= count
-
-        pred = outputs['seg_logits']
-        label = outputs['label'].squeeze(1)
-        losses['loss_static'] = self.static_loss(pred, label)
-        losses['loss_seg'] = self.ce_loss(pred, label)
->>>>>>> 07a8384945a24d145d2716e50a959015a4afe190
 
         loss_g, log_vars_g = self._parse_losses(losses)
         loss_g.backward()
@@ -359,7 +339,7 @@ class SegGAN(BaseGAN):
         segmentor.CLASSES = CLASSES
         seg_source = segmentor.show_result(
             img.permute(0, 2, 3, 1).cpu().numpy()[0],
-            outputs['seg_logits'].detach().cpu().numpy()[0])
+            outputs['seg_logits'].detach().cpu().numpy()[0], opacity=0.1)
 
         log_vars.pop('loss', None)  # remove the unnecessary 'loss'
         results = dict(log_vars=log_vars,

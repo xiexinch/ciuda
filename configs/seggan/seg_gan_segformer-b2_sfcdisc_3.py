@@ -51,16 +51,24 @@ model = dict(
                   real_label_val=1.0,
                   fake_label_val=0.0,
                   loss_weight=1.0),
-    ce_loss=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0,class_weight=[
-                     0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1,
-                     0.1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
-                 ]),
+    ce_loss=dict(type='CrossEntropyLoss',
+                 use_sigmoid=False,
+                 loss_weight=1.0,
+                 class_weight=[
+                     0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 1.0, 1.0, 0.1, 0.1, 0.1,
+                     1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+                 ]
+                 # class_weight=[
+                 #     0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+                 #     1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+                 # ]
+                ),
     static_loss=dict(type='CrossEntropyLoss',
                      use_sigmoid=False,
-                     loss_weight=0.4,
+                     loss_weight=0.0,
                      class_weight=[
                          1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
-                         0., 0., 0., 0., 0., 0., 0., 0.
+                         0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1
                      ]))
 train_cfg = dict(direction='a2b', buffer_size=10)
 test_cfg = dict(direction='a2b', show_input=True)
@@ -88,7 +96,7 @@ lr_config = dict(policy='poly',
                  min_lr=0.0,
                  by_epoch=False)
 
-checkpoint_config = dict(interval=4000, save_optimizer=True, by_epoch=False)
+checkpoint_config = dict(interval=2000, save_optimizer=True, by_epoch=False)
 custom_hooks = [
     dict(type='MMGenVisualizationHook',
          output_dir='training_samples',
@@ -104,9 +112,9 @@ custom_hooks = [
 runner = None
 
 use_ddp_wrapper = True
-total_iters = 40000
+total_iters = 20000
 workflow = [('train', 1)]
-exp_name = 'seggan_202203171018'
+exp_name = 'seggan_202203210200'
 work_dir = f'./work_dirs/experiments/{exp_name}'
 # evaluation = dict(interval=100, metric='mIoU', pre_eval=True)
 checkpoint = 'checkpoints/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'  # noqa

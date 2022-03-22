@@ -5,7 +5,6 @@ from mmgen.models import MODULES
 
 @MODULES.register_module()
 class SimpleFCDiscriminator(nn.Module):
-
     def __init__(self, in_channels):
         super(SimpleFCDiscriminator, self).__init__()
 
@@ -15,13 +14,15 @@ class SimpleFCDiscriminator(nn.Module):
                                     stride=1,
                                     padding=2)
         self.leaky_relu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+
         self.init_weights()
 
     def forward(self, x):
+        # x = self.leaky_relu(x)
         x = self.classifier(x)
         return x
 
-    def init_weights(self):
+    def init_weights(self, pretrained=None):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_uniform_(m.weight, mode='fan_out')
@@ -37,7 +38,6 @@ class SimpleFCDiscriminator(nn.Module):
 
 
 class FCDiscriminator(nn.Module):
-
     def __init__(self, in_channels, base_channels=64, num_convs=4):
         super(FCDiscriminator, self).__init__()
         self.conv1 = nn.Conv2d(in_channels,

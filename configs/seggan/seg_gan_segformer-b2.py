@@ -97,6 +97,6 @@ runner = None
 use_ddp_wrapper = True
 total_iters = 80000
 workflow = [('train', 1)]
-exp_name = 'seggan_202203141628'
+exp_name = 'seggan_202203171655'
 work_dir = f'./work_dirs/experiments/{exp_name}'
 # evaluation = dict(interval=100, metric='mIoU', pre_eval=True)

@@ -7,7 +7,7 @@ import time
 import mmcv
 import torch
 from mmcv import Config, DictAction
-from mmcv.runner import get_dist_info, init_dist
+from mmcv.runner import load_checkpoint, get_dist_info, init_dist
 from mmcv.utils import get_git_hash
 
 from mmgen import __version__
@@ -141,6 +141,8 @@ def main():
     model = build_model(cfg.model,
                         train_cfg=cfg.train_cfg,
                         test_cfg=cfg.test_cfg)
+    if cfg.checkpoint:
+        load_checkpoint(model.segmentors['a'], cfg.checkpoint)
 
     datasets = [build_dataset(cfg.data.train)]
     if len(cfg.workflow) == 2:

@@ -44,12 +44,7 @@ model = dict(
         # model training and testing settings
         train_cfg=dict(),
         test_cfg=dict(mode='whole')),
-    discriminator=dict(type='PatchDiscriminator',
-                       in_channels=2048,
-                       base_channels=64,
-                       num_conv=3,
-                       norm_cfg=dict(type='IN'),
-                       init_cfg=dict(type='normal', gain=0.02)),
+    discriminator=dict(type='SimpleFCDiscriminator', in_channels=2048),
     gan_loss=dict(type='BatchGANLoss',
                   gan_type='vanilla',
                   real_label_val=1.0,
@@ -74,7 +69,13 @@ optimizer = dict(discriminators=dict(type='Adam',
                                  momentum=0.9,
                                  weight_decay=0.0005))
 # learning policy
-lr_config = dict(policy='poly', power=0.9, min_lr=1e-4, by_epoch=False)
+lr_config = dict(policy='poly',
+                 warmup='linear',
+                 warmup_iters=1500,
+                 warmup_ratio=1e-6,
+                 power=1.0,
+                 min_lr=0.0,
+                 by_epoch=False)
 
 checkpoint_config = dict(interval=8000, save_optimizer=True, by_epoch=False)
 custom_hooks = [
@@ -94,6 +95,6 @@ runner = None
 use_ddp_wrapper = True
 total_iters = 80000
 workflow = [('train', 1)]
-exp_name = 'seggan_pspnet_202203121510'
+exp_name = 'seggan_pspnet_202203171004'
 work_dir = f'./work_dirs/experiments/{exp_name}'
 # evaluation = dict(interval=100, metric='mIoU', pre_eval=True)

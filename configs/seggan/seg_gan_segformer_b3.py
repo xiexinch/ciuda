@@ -15,28 +15,22 @@ model = dict(
     segmentor=dict(
         type='EncoderDecoder',
         pretrained=None,
-        backbone=dict(
-            type='MixVisionTransformer',
-            in_channels=3,
-            embed_dims=64,
-            num_stages=4,
-            num_layers=[3, 4, 18, 3],
-            num_heads=[1, 2, 5, 8],
-            patch_sizes=[7, 3, 3, 3],
-            sr_ratios=[8, 4, 2, 1],
-            out_indices=(0, 1, 2, 3),
-            mlp_ratio=4,
-            qkv_bias=True,
-            drop_rate=0.0,
-            attn_drop_rate=0.0,
-            drop_path_rate=0.1,
-              init_cfg=dict(type='Pretrained',
-<<<<<<< HEAD:configs/seggan/seg_gan_segformer.py
-                            checkpoint='pretrain/mit_b2.pth')
-=======
-                            checkpoint='pretrain/mit_b3.pth')
->>>>>>> 07a8384945a24d145d2716e50a959015a4afe190:configs/seggan/seg_gan_segformer_b3.py
-        ),
+        backbone=dict(type='MixVisionTransformer',
+                      in_channels=3,
+                      embed_dims=64,
+                      num_stages=4,
+                      num_layers=[3, 4, 18, 3],
+                      num_heads=[1, 2, 5, 8],
+                      patch_sizes=[7, 3, 3, 3],
+                      sr_ratios=[8, 4, 2, 1],
+                      out_indices=(0, 1, 2, 3),
+                      mlp_ratio=4,
+                      qkv_bias=True,
+                      drop_rate=0.0,
+                      attn_drop_rate=0.0,
+                      drop_path_rate=0.1,
+                      init_cfg=dict(type='Pretrained',
+                                    checkpoint='pretrain/mit_b3.pth')),
         decode_head=dict(type='SegformerHead',
                          in_channels=[64, 128, 320, 512],
                          in_index=[0, 1, 2, 3],
@@ -101,10 +95,6 @@ runner = None
 use_ddp_wrapper = True
 total_iters = 80000
 workflow = [('train', 1)]
-<<<<<<< HEAD:configs/seggan/seg_gan_segformer.py
 exp_name = 'seggan_202203141045'
-=======
-exp_name = 'seggan_202203121628'
->>>>>>> 07a8384945a24d145d2716e50a959015a4afe190:configs/seggan/seg_gan_segformer_b3.py
 work_dir = f'./work_dirs/experiments/{exp_name}'
 # evaluation = dict(interval=100, metric='mIoU', pre_eval=True)
