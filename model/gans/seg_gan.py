@@ -135,6 +135,10 @@ class SegGAN(BaseGAN):
         """
 
         segmentor = self.get_module(self.segmentors)['a']
+        
+        # with torch.no_grad():
+        #     feat = segmentor.extract_feat(img)
+        # pred = segmentor._decode_head_forward_test(feat, dict())
 
         feat = segmentor.extract_feat(img)
         pred = segmentor._decode_head_forward_test(feat, dict())
@@ -225,7 +229,8 @@ class SegGAN(BaseGAN):
 
         losses = dict()
         # GAN loss for discriminators['a']
-        pred = discriminators['a'](outputs['feat'].detach().contiguous())
+        # pred = discriminators['a'](outputs['feat'].detach().contiguous())
+        pred = discriminators['a'](outputs['seg_logits'].detach().contiguous())
         is_source = outputs['is_source'].data
         # losses['loss_gan_d'] = 0
         # for i, p in enumerate(pred):
@@ -263,7 +268,7 @@ class SegGAN(BaseGAN):
         # GAN loss for segmentors['a']
         # with torch.no_grad():
         #     pred = discriminator(outputs['feat'])
-        pred = discriminator(outputs['feat'])
+        pred = discriminator(outputs['seg_logits'])
         is_source = outputs['is_source'].data
 
         losses['loss_gan_g'] = self.gan_loss(
