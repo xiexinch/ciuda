@@ -229,9 +229,9 @@ class SegGAN2(BaseGAN):
                                                target_is_real=True,
                                                is_disc=True)
 
-        losses['loss_gan_d_t'] += self.gan_loss(target_pred,
-                                                target_is_real=False,
-                                                is_disc=True)
+        losses['loss_gan_d_t'] = self.gan_loss(target_pred,
+                                               target_is_real=False,
+                                               is_disc=True)
 
         loss_d_a, log_vars_d_a = self._parse_losses(losses)
         loss_d_a *= 0.5
