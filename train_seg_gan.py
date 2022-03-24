@@ -14,7 +14,7 @@ from mmgen import __version__
 from mmgen.apis import set_random_seed
 from mmgen.datasets import build_dataset
 from mmgen.models import build_model
-from mmgen.utils import collect_env, get_root_logger
+from mmgen.utils import get_root_logger
 
 from model.gans import *  # noqa
 from dataset import *  # noqa

@@ -7,7 +7,7 @@ from torch.utils.data import Dataset
 # from mmgen.datasets.builder import DATASETS
 
 
-@DATASETS.register_module()
+# @DATASETS.register_module()
 class ZurichPairDataset(Dataset):
 
     def __init__(self,

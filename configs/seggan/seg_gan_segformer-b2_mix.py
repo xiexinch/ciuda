@@ -1,6 +1,5 @@
 _base_ = [
-    '../_base_/datasets/unpaired_imgs_label_1024x512.py',
-    '../_base_/default_mmgen_runtime.py'
+    '../_base_/datasets/mix_dataset.py', '../_base_/default_mmgen_runtime.py'
 ]
 log_config = dict(
     interval=50,
@@ -8,10 +7,10 @@ log_config = dict(
         dict(type='TextLoggerHook'),
         # dict(type='TensorboardLoggerHook'),
     ])
-norm_cfg = dict(type='SyncBN', requires_grad=True)
-# norm_cfg = dict(type='BN', requires_grad=True)
+# norm_cfg = dict(type='SyncBN', requires_grad=True)
+norm_cfg = dict(type='BN', requires_grad=True)
 model = dict(
-    type='SegGAN',
+    type='SegGAN2',
     segmentor=dict(
         type='EncoderDecoder',
         pretrained=None,
@@ -46,7 +45,7 @@ model = dict(
         train_cfg=dict(),
         test_cfg=dict(mode='whole')),
     discriminator=dict(type='FCDiscriminator', in_channels=19),
-    gan_loss=dict(type='BatchGANLoss',
+    gan_loss=dict(type='GANLoss',
                   gan_type='vanilla',
                   real_label_val=1.0,
                   fake_label_val=0.0,
@@ -77,28 +76,14 @@ test_cfg = dict(direction='a2b', show_input=True)
 optimizer = dict(discriminators=dict(type='Adam',
                                      lr=0.0002,
                                      betas=(0.5, 0.999)),
-                 segmentors=dict(type='AdamW',
-                                 lr=0.00006,
-                                 betas=(0.9, 0.999),
-                                 weight_decay=0.01,
-                                 paramwise_cfg=dict(
-                                     custom_keys={
-                                         'pos_block': dict(decay_mult=0.),
-                                         'norm': dict(decay_mult=0.),
-                                         'head': dict(lr_mult=10.)
-                                     })))
+                 segmentors=dict(type='SGD',
+                                 lr=0.01,
+                                 momentum=0.9,
+                                 weight_decay=0.0005))
 # learning policy
-# lr_config = dict(policy='poly', power=0.9, min_lr=1e-4, by_epoch=False)
-lr_config = dict(policy='poly',
-                 warmup='linear',
-                 warmup_iters=1500,
-                 warmup_ratio=1e-6,
-                 power=1.0,
-                 min_lr=0.0,
-                 by_epoch=False)
+lr_config = dict(policy='poly', power=0.9, min_lr=1e-4, by_epoch=False)
 
-checkpoint_config = dict(interval=4000, save_optimizer=True, by_epoch=False)
-
+checkpoint_config = dict(interval=8000, save_optimizer=True, by_epoch=False)
 custom_hooks = [
     dict(type='MMGenVisualizationHook',
          output_dir='training_samples',
@@ -114,9 +99,9 @@ custom_hooks = [
 runner = None
 
 use_ddp_wrapper = True
-total_iters = 20000
+total_iters = 80000
 workflow = [('train', 1)]
-exp_name = 'seggan_202203222156'
+exp_name = 'seggan_202203171655'
 work_dir = f'./work_dirs/experiments/{exp_name}'
 # evaluation = dict(interval=100, metric='mIoU', pre_eval=True)
 checkpoint = 'checkpoints/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'  # noqa
