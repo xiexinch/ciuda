@@ -97,6 +97,7 @@ lr_config = dict(policy='poly',
                  by_epoch=False)
 
 checkpoint_config = dict(interval=4000, save_optimizer=True, by_epoch=False)
+
 custom_hooks = [
     dict(type='MMGenVisualizationHook',
          output_dir='training_samples',
@@ -112,9 +113,15 @@ custom_hooks = [
 runner = None
 
 use_ddp_wrapper = True
+<<<<<<< HEAD
 total_iters = 80000
 workflow = [('train', 1)]
 exp_name = 'seggan_202203232321'
+=======
+total_iters = 20000
+workflow = [('train', 1)]
+exp_name = 'seggan_202203222156'
+>>>>>>> eda84e29712fa8cd1a6b670140d7fe213edee7d6
 work_dir = f'./work_dirs/experiments/{exp_name}'
 # evaluation = dict(interval=100, metric='mIoU', pre_eval=True)
 checkpoint = 'checkpoints/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'  # noqa
