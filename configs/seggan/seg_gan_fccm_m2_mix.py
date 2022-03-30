@@ -10,7 +10,7 @@ log_config = dict(
 norm_cfg = dict(type='SyncBN', requires_grad=True)
 # norm_cfg = dict(type='BN', requires_grad=True)
 model = dict(
-    type='SegGAN3',
+    type='SegGAN2',
     segmentor=dict(
         type='EncoderDecoder',
         pretrained=None,
@@ -77,7 +77,7 @@ model = dict(
         # model training and testing settings
         train_cfg=dict(),
         test_cfg=dict(mode='whole')),
-    discriminator=dict(type='SimpleFCDiscriminator', in_channels=512),
+    discriminator=dict(type='FCDiscriminator', in_channels=19),
     gan_loss=dict(type='GANLoss',
                   gan_type='vanilla',
                   real_label_val=1.0,

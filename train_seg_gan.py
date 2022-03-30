@@ -21,6 +21,7 @@ from dataset import *  # noqa
 from model.losses import *  # noqa
 from model.core import train_model
 from model.discriminator import *  # noqa
+from model.seg_head import *  # noqa
 
 
 def parse_args():
