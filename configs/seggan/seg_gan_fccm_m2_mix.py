@@ -14,6 +14,13 @@ model = dict(
     segmentor=dict(
         type='EncoderDecoder',
         pretrained=None,
+        backbone=dict(type='MobileNetV2',
+                      widen_factor=1.,
+                      strides=(1, 2, 2, 2, 1, 2, 1),
+                      dilations=(1, 1, 1, 1, 1, 1, 1),
+                      out_indices=(1, 2, 4, 6),
+                      init_cfg=dict(type='Pretrained',
+                                    checkpoint='mmcls://mobilenet_v2')),
         decode_head=dict(type='FCCMHead_EXT',
                          channels=1024,
                          with_fuse_attn=True),
