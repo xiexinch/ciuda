@@ -17,9 +17,11 @@ class ChannelAttention(BaseModule):
         self.max_pool = nn.AdaptiveMaxPool2d(1)
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.se = nn.Sequential(
-            nn.Conv2d(channels, channels // reduction, 1,
-                      bias=False), nn.ReLU(),
-            nn.Conv2d(channels // reduction, channels, 1, bias=False))
+            nn.Conv2d(channels, channels // reduction, 1, bias=False),
+            nn.ReLU(), nn.Conv2d(channels // reduction,
+                                 channels,
+                                 1,
+                                 bias=False))
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
@@ -35,12 +37,11 @@ class SpatialAttention(BaseModule):
 
     def __init__(self, kernel_size=7, init_cfg=None):
         super(SpatialAttention, self).__init__(init_cfg)
-        self.conv = ConvModule(
-            in_channels=2,
-            out_channels=1,
-            kernel_size=kernel_size,
-            padding=kernel_size // 2,
-            act_cfg=None)
+        self.conv = ConvModule(in_channels=2,
+                               out_channels=1,
+                               kernel_size=kernel_size,
+                               padding=kernel_size // 2,
+                               act_cfg=None)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
@@ -86,7 +87,6 @@ class BilateralAttn(BaseModule):
         sa_img = sa_attn.permute(1, 2, 0).detach().cpu().numpy()
         sa_img = (sa_img * 255).astype(np.uint8)
         cv2.imwrite('work_dirs/sa_attn.png', sa_img)
-        raise "123"
         x = x * self.ca(x)
         x = x * self.sa(x)
         return x + residual
@@ -105,22 +105,28 @@ class FCCMHead(BaseDecodeHead):
         super(FCCMHead, self).__init__(in_channels, channels, **kwargs)
 
         # 滤波器
-        self.up_conv = ConvModule(
-            in_channels[-1], in_channels[-1], 3, padding=1, norm_cfg=norm_cfg)
+        self.up_conv = ConvModule(in_channels[-1],
+                                  in_channels[-1],
+                                  3,
+                                  padding=1,
+                                  norm_cfg=norm_cfg)
 
         # spatial attn
-        self.spatial_attn = BilateralAttn(
-            in_channels[0], reduction=16, kernel_size=7)
+        self.spatial_attn = BilateralAttn(in_channels[0],
+                                          reduction=16,
+                                          kernel_size=7)
 
         # semantic attn
-        self.semantic_attn = BilateralAttn(
-            in_channels[-1], reduction=16, kernel_size=7)
+        self.semantic_attn = BilateralAttn(in_channels[-1],
+                                           reduction=16,
+                                           kernel_size=7)
 
         # fuse attn
         self.with_fuse_attn = with_fuse_attn
         if self.with_fuse_attn:
-            self.fuse_attn = BilateralAttn(
-                sum(in_channels), reduction=32, kernel_size=7)
+            self.fuse_attn = BilateralAttn(sum(in_channels),
+                                           reduction=32,
+                                           kernel_size=7)
 
     def forward(self, inputs):
         x = self._transform_inputs(inputs)
@@ -128,8 +134,10 @@ class FCCMHead(BaseDecodeHead):
 
         # 先模糊再上采样
         x_32 = self.up_conv(x_32)
-        x_32 = resize(
-            x_32, scale_factor=4, mode='bilinear', align_corners=True)
+        x_32 = resize(x_32,
+                      scale_factor=4,
+                      mode='bilinear',
+                      align_corners=True)
         x_32 = self.semantic_attn(x_32)
 
         # 空间注意力
@@ -157,26 +165,30 @@ class FCCMHead_EXT(BaseDecodeHead):
         super(FCCMHead_EXT, self).__init__(in_channels, channels, **kwargs)
 
         # 滤波器
-        self.up_conv = ConvModule(
-            in_channels[-1], in_channels[-1], 3, padding=1, norm_cfg=norm_cfg)
+        self.up_conv = ConvModule(in_channels[-1],
+                                  in_channels[-1],
+                                  3,
+                                  padding=1,
+                                  norm_cfg=norm_cfg)
 
         # spatial attn
-        self.spatial_attn = BilateralAttn(
-            in_channels[0], reduction=16, kernel_size=7)
+        self.spatial_attn = BilateralAttn(in_channels[0],
+                                          reduction=16,
+                                          kernel_size=7)
 
         # semantic attn
-        self.semantic_attn = BilateralAttn(
-            in_channels[-1], reduction=16, kernel_size=7)
+        self.semantic_attn = BilateralAttn(in_channels[-1],
+                                           reduction=16,
+                                           kernel_size=7)
 
         # fuse attn
         self.with_fuse_attn = with_fuse_attn
         if self.with_fuse_attn:
-            self.fuse_attn = ConvModule(
-                in_channels=sum(in_channels),
-                out_channels=channels,
-                kernel_size=3,
-                padding=1,
-                norm_cfg=norm_cfg)
+            self.fuse_attn = ConvModule(in_channels=sum(in_channels),
+                                        out_channels=channels,
+                                        kernel_size=3,
+                                        padding=1,
+                                        norm_cfg=norm_cfg)
 
         # learnable upsampling
         self.upsample = build_upsample_layer(
@@ -194,48 +206,10 @@ class FCCMHead_EXT(BaseDecodeHead):
         # 空间注意力
         x_8 = self.spatial_attn(x_8)
 
-        print(x_8.shape)
-        print(x_32.shape)
-        from torchvision.utils import make_grid
-        import cv2
-        import numpy as np
-        attn_feat_8 = resize(
-            x_8, scale_factor=8, mode='bilinear', align_corners=False)
-        for i, feat in enumerate(attn_feat_8[0]):
-            feat = make_grid(feat, normalize=True)
-            feat_img = feat.permute(1, 2, 0).detach().cpu().numpy()
-            feat_img = (feat_img * 255).astype(np.uint8)
-            cv2.imwrite(f'work_dirs/attn_feature/ds8_feat{i}.png', feat_img)
-
-        for i, feat in enumerate(x_32[0]):
-            feat = resize(
-                feat.unsqueeze(0).unsqueeze(0),
-                scale_factor=8,
-                mode='bilinear',
-                align_corners=False).squeeze(0).squeeze(0)
-
-            feat = make_grid(feat, normalize=True)
-            feat_img = feat.permute(1, 2, 0).detach().cpu().numpy()
-            feat_img = (feat_img * 255).astype(np.uint8)
-            cv2.imwrite(f'work_dirs/attn_feature/ds32_feat{i}.png', feat_img)
-
         x_cat = torch.cat([x_8, x_32], dim=1)
         if self.with_fuse_attn:
             x_cat = self.fuse_attn(x_cat)
 
-        for i, feat in enumerate(x_cat[0]):
-            feat = resize(
-                feat.unsqueeze(0).unsqueeze(0),
-                scale_factor=8,
-                mode='bilinear',
-                align_corners=False).squeeze(0).squeeze(0)
-
-            feat = make_grid(feat, normalize=True)
-            feat_img = feat.permute(1, 2, 0).detach().cpu().numpy()
-            feat_img = (feat_img * 255).astype(np.uint8)
-            cv2.imwrite(f'work_dirs/attn_feature/fuse_feat{i}.png', feat_img)
-
-        raise "213"
         # A*context + B*spatial + bias
         out = self.conv_seg(x_cat)
         return out
@@ -254,8 +228,11 @@ class FFCCMHead_EXT(BaseDecodeHead):
         super(FFCCMHead_EXT, self).__init__(in_channels, channels, **kwargs)
 
         # 滤波器
-        self.up_conv = ConvModule(
-            in_channels[-1], in_channels[-1], 3, padding=1, norm_cfg=norm_cfg)
+        self.up_conv = ConvModule(in_channels[-1],
+                                  in_channels[-1],
+                                  3,
+                                  padding=1,
+                                  norm_cfg=norm_cfg)
 
         # # spatial attn
         # self.spatial_attn = BilateralAttn(
@@ -268,8 +245,9 @@ class FFCCMHead_EXT(BaseDecodeHead):
         # fuse attn
         self.with_fuse_attn = with_fuse_attn
         if self.with_fuse_attn:
-            self.fuse_attn = BilateralAttn(
-                sum(in_channels), reduction=32, kernel_size=7)
+            self.fuse_attn = BilateralAttn(sum(in_channels),
+                                           reduction=32,
+                                           kernel_size=7)
 
         # learnable upsampling
         self.upsample = build_upsample_layer(
@@ -309,29 +287,26 @@ class BiFCCMHead_EXT(BaseDecodeHead):
         super(BiFCCMHead_EXT, self).__init__(in_channels, channels, **kwargs)
 
         self.semantic_up = nn.Sequential(
-            ConvModule(
-                in_channels[-1],
-                in_channels[0],
-                3,
-                padding=1,
-                norm_cfg=norm_cfg),
+            ConvModule(in_channels[-1],
+                       in_channels[0],
+                       3,
+                       padding=1,
+                       norm_cfg=norm_cfg),
             build_upsample_layer(
                 dict(type='carafe', channels=in_channels[0], scale_factor=4)))
 
         self.context_down = nn.Sequential(
-            ConvModule(
-                in_channels[0],
-                in_channels[0],
-                3,
-                padding=1,
-                norm_cfg=norm_cfg),
-            ConvModule(
-                in_channels[0],
-                in_channels[-1],
-                3,
-                padding=1,
-                stride=2,
-                norm_cfg=norm_cfg),
+            ConvModule(in_channels[0],
+                       in_channels[0],
+                       3,
+                       padding=1,
+                       norm_cfg=norm_cfg),
+            ConvModule(in_channels[0],
+                       in_channels[-1],
+                       3,
+                       padding=1,
+                       stride=2,
+                       norm_cfg=norm_cfg),
             nn.AvgPool2d(kernel_size=3, stride=2, padding=1, ceil_mode=False))
 
         self.upsample = build_upsample_layer(
