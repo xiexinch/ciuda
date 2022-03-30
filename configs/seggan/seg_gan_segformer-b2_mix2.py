@@ -10,7 +10,7 @@ log_config = dict(
 norm_cfg = dict(type='SyncBN', requires_grad=True)
 # norm_cfg = dict(type='BN', requires_grad=True)
 model = dict(
-    type='SegGAN2',
+    type='SegGAN3',
     segmentor=dict(
         type='EncoderDecoder',
         pretrained=None,
@@ -44,7 +44,7 @@ model = dict(
         # model training and testing settings
         train_cfg=dict(),
         test_cfg=dict(mode='whole')),
-    discriminator=dict(type='FCDiscriminator', in_channels=19),
+    discriminator=dict(type='SimpleFCDiscriminator', in_channels=512),
     gan_loss=dict(type='GANLoss',
                   gan_type='vanilla',
                   real_label_val=1.0,
@@ -59,10 +59,9 @@ model = dict(
         #     1.0, 1.0, 1.0, 1.0, 1.0, 1.0
         # ]
         class_weight=[
-            1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
-            1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
-        ]
-    ),
+            1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+            1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+        ]),
     static_loss=dict(type='CrossEntropyLoss',
                      use_sigmoid=False,
                      loss_weight=1.0,
@@ -96,7 +95,6 @@ lr_config = dict(policy='poly',
                  min_lr=0.0,
                  by_epoch=False)
 
-
 checkpoint_config = dict(interval=2000, save_optimizer=True, by_epoch=False)
 # custom_hooks = [
 #     dict(type='MMGenVisualizationHook',
@@ -113,11 +111,11 @@ checkpoint_config = dict(interval=2000, save_optimizer=True, by_epoch=False)
 runner = None
 
 use_ddp_wrapper = True
-total_iters = 20000
+total_iters = 40000
 workflow = [('train', 1)]
-exp_name = 'seggan_202203271351'
+exp_name = 'seggan_202203300047'
 work_dir = f'./work_dirs/experiments/{exp_name}'
 # evaluation = dict(interval=100, metric='mIoU', pre_eval=True)
 checkpoint = 'checkpoints/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'  # noqa
 
-data=dict(samples_per_gpu=4)
+data = dict(samples_per_gpu=4)

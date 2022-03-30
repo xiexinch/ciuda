@@ -16,7 +16,7 @@ from mmseg.ops import resize
 
 
 @MODELS.register_module()
-class SegGAN2(BaseGAN):
+class SegGAN3(BaseGAN):
     """CycleGAN model for unpaired image-to-image translation.
 
     Ref:
@@ -50,7 +50,6 @@ class SegGAN2(BaseGAN):
             `direction` during testing: a2b | b2a.
         pretrained (str): Path for pretrained model. Default: None.
     """
-
     def __init__(self,
                  segmentor,
                  discriminator,
@@ -250,14 +249,19 @@ class SegGAN2(BaseGAN):
                       mode='bilinear',
                       align_corners=False)
 
-        results = dict(seg_logits=pred, label=label)
+        results = dict(seg_logits=pred, label=label, feat=feat[-1])
         return results
 
     def forward_target(self, img_day, img_night):
         segmentor = self.get_module(self.segmentors)['a']
 
         day_pred = segmentor.encode_decode(img_day, dict())
-        night_pred = segmentor.encode_decode(img_night, dict())
+        nighi_feat = segmentor.extract_feat(img_night)
+        night_pred = segmentor._decode_head_forward_test(nighi_feat, dict())
+        night_pred = resize(input=night_pred,
+                            size=img_night.shape[2:],
+                            mode='bilinear',
+                            align_corners=False)
 
         psudo_prob = torch.zeros_like(day_pred)
         threshold = torch.ones_like(day_pred[:, :11, :, :]) * 0.2
@@ -283,26 +287,24 @@ class SegGAN2(BaseGAN):
         pseudo_gt = torch.argmax(psudo_prob.detach(), dim=1)
         pseudo_gt[pseudo_gt >= 11] = 255
 
-        results = dict(seg_logits=night_pred, label=pseudo_gt)
+        results = dict(seg_logits=night_pred,
+                       label=pseudo_gt,
+                       feat=nighi_feat[-1])
         return results
 
     def backward_segmentor(self, source_outputs, target_outputs):
         discriminators = self.get_module(self.discriminators)['a']
 
         losses = dict()
-        pred = discriminators(
-            target_outputs['seg_logits'].detach().contiguous())
+        pred = discriminators(target_outputs['feat'].detach().contiguous())
         losses['loss_seg'] = self.ce_loss(source_outputs['seg_logits'],
                                           source_outputs['label'].squeeze(1))
-        losses['loss_gan_ss'] = self.gan_loss(pred,
-                                              target_is_real=True,
-                                              is_disc=False) * 0.01
-        pred = discriminators(
-            target_outputs['seg_logits'].detach().contiguous())
+        losses['loss_gan_ss'] = self.gan_loss(
+            pred, target_is_real=True, is_disc=False) * 0.01
+        pred = discriminators(target_outputs['feat'].detach().contiguous())
 
-        losses['loss_gan_st'] = self.gan_loss(pred,
-                                              target_is_real=False,
-                                              is_disc=False) * 0.01
+        losses['loss_gan_st'] = self.gan_loss(
+            pred, target_is_real=False, is_disc=False) * 0.01
 
         losses['loss_static'] = self.static_loss(target_outputs['seg_logits'],
                                                  target_outputs['label'])
@@ -340,8 +342,8 @@ class SegGAN2(BaseGAN):
 
         log_vars.update(
             self.backward_discriminators(
-                outputs=dict(source_seg_logits=source_outputs['seg_logits'],
-                             target_seg_logits=target_outputs['seg_logits'])))
+                outputs=dict(source_seg_logits=source_outputs['feat'],
+                             target_seg_logits=target_outputs['feat'])))
         optimizer['discriminators'].step()
 
         # generators, no updates to discriminator parameters.

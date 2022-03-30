@@ -8,12 +8,12 @@ log_config = dict(
     ])
 # yapf:enable
 
-custom_hooks = [
-    dict(
-        type='VisualizeUnconditionalSamples',
-        output_dir='training_samples',
-        interval=1000)
-]
+# custom_hooks = [
+#     dict(
+#         type='VisualizeUnconditionalSamples',
+#         output_dir='training_samples',
+#         interval=1000)
+# ]
 
 # use dynamic runner
 runner = dict(

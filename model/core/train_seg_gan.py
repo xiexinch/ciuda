@@ -59,7 +59,7 @@ def train_model(model,
             # cfg.gpus will be ignored if distributed
             len(cfg.gpu_ids),
             dist=distributed,
-            persistent_workers=cfg.data.get('persistent_workers', False),
+            persistent_workers=cfg.data.get('persistent_workers', True),
             seed=cfg.seed) for ds in dataset
     ]
 
